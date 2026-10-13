@@ -111,8 +111,10 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
 - Secrets (logins, indexer API keys, webhook URLs) live only in each service's data or its own gitignored
   `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host.
 - Don't run an auto-updater such as Watchtower on these containers; upgrade by release instead.
-- The policy check refuses privileged containers, added capabilities, host networking and Docker socket
-  mounts unless a service documents why ([docs/security.md](docs/security.md)).
+- Every service drops every Linux capability, adds back only the ones its image needs, and can't gain new
+  privileges. The policy check refuses privileged containers, capabilities beyond Docker's defaults, host
+  networking, device mappings and Docker socket mounts unless a service documents why
+  ([docs/security.md](docs/security.md)).
 
 Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
