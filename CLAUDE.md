@@ -23,8 +23,11 @@ Keep them current as work lands: tick roadmap checkboxes, add a Pass-Map row per
 Decisions-Log entries. **The notes never go into this repo.** Chronos is versioned in its own private repo;
 only commit or push it when the owner asks. The old in-repo vault path `.obsidian-docs/` stays gitignored.
 
-The sibling repos `~/GitHub/homelab-ares`, `~/GitHub/homelab-atlas` and `~/GitHub/homelab-deimos` follow the
-same pattern; this repo's tooling was copied from homelab-deimos (itself from homelab-ares). homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy.
+The sibling repos `~/GitHub/homelab-ares`, `~/GitHub/homelab-atlas`, `~/GitHub/homelab-deimos` and
+`~/GitHub/homelab-helios` follow the same pattern. **homelab-ares is the template for the homelab stacks**
+(owner 2026-10-13): tooling that isn't specific to this host's services (checker, backup scripts, smoke test,
+workflows) is kept the same as ares'; a change here that isn't about this host's services goes to ares too.
+homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy.
 
 ## This repo is public
 - No hostnames, IP addresses, internal or public domains, host paths, NFS exports, Portainer stack names,
@@ -56,6 +59,9 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
 - **Downloads are never backed up, restored or deleted by this repo's scripts.** A service lists such paths in
   its `org.honeybeartech.hyperion.backup.skip` label (comma-separated container paths); `backup.sh` skips them,
   `restore.sh` refuses to write them, and the smoke test checks both. qBittorrent's must list `/downloads`.
+  Paths inside a mount that a service's `org.honeybeartech.hyperion.backup.exclude` label lists are left out of
+  its archive and left in place by a restore (no service uses it yet); a mount inside another mount is archived
+  on its own. Each backup also writes `NETWORKS` and `VERSION`. Keep it that way when adding a service.
 - **No privileged containers, added capabilities, host network/PID or Docker socket mounts** unless the
   service carries `org.honeybeartech.hyperion.allow.<rule>: "<reason>"` and the owner agreed. Only Dozzle
   (read-only) and the socket proxy may have the socket; autoheal reaches Docker only through the proxy.
@@ -81,12 +87,19 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
   (linuxserver.io), Dozzle, the Minecraft Bedrock server (`itzg/minecraft-bedrock-server`), autoheal, a socket
   proxy. Not in this repo: Plex, Tdarr, the Argus agent, the Portainer agent, the local Portainer server (to be
   retired).
-- Tooling (ported from homelab-deimos): `scripts/check_compose.py` (Python, standard library only:
+- Tooling (from homelab-ares, the template): `scripts/check_compose.py` (Python, standard library only:
   policy check + CycloneDX SBOM), `scripts/backup.sh`, `restore.sh`, `scheduled-backup.sh`, `smoke-test.sh`,
   `lib.sh` (bash, must run on macOS' bash 3.2; `scheduled-backup.sh` also with macOS' openrsync, so no
   `--chmod`); ruff (`select = ["ALL"]`), yamllint, shellcheck, pytest + coverage (90 % branch floor), pip-tools
   for the hash-pinned `requirements-dev.txt`. CI-only: actionlint, gitleaks, CodeQL, Scorecard, dependency
-  review, DCO, Trivy image scan, Dependabot auto-merge (patch/minor).
+  review, DCO, Trivy image scan, Dependabot auto-merge (patch/minor). CI logs in to Docker Hub with the
+  read-only `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets when they exist (owner 2026-10-13; not created yet, so
+  it pulls anonymously) and logs out before the smoke test starts any container.
+- GitLab copy: the owner's self-hosted GitLab (CE, LAN only; host facts in Chronos) is to hold a mirror. GitHub
+  stays the home (OpenSSF badges, Scorecard, Dependabot, releases); every change goes to GitHub as a PR, never to
+  GitLab. `.gitlab-ci.yml` mirrors GitHub on a schedule (fast-forward only, `MIRROR_TOKEN` CI/CD variable) and
+  re-runs the daemon-free checks; the smoke test stays GitHub-only, as on homelab-ares. The owner still has to
+  create the GitLab project, the `MIRROR_TOKEN` variable and the schedule; until then the file does nothing.
 - Releases (`release.yml`, on a `v*.*.*` tag; it refuses to run without `compose.yaml`): policy check, source
   archive, CycloneDX SBOM, `SHA256SUMS` signed with cosign keyless, SLSA provenance, GitHub Release from the
   tag's `CHANGELOG.md` section. No images are built or published.

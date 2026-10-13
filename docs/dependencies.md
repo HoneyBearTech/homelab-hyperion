@@ -37,6 +37,7 @@ Bedrock clients can only join a Bedrock server. It runs with no added privileges
 | Helper image for backups and the smoke test (busybox) | [`scripts/lib.sh`](../scripts/lib.sh) | version tag and digest | Docker |
 | Linters and scanners used only by CI (actionlint, gitleaks, Trivy) | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scan.yml`](../.github/workflows/scan.yml) | version tag and digest | Docker |
 | GitHub Actions | [`.github/workflows/`](../.github/workflows/) | full commit SHA (version in a comment) | GitHub Actions |
+| Images of the GitLab copy's pipeline (Python, Docker CLI, git, gitleaks, actionlint) | [`.gitlab-ci.yml`](../.gitlab-ci.yml) | version tag and digest | GitLab Runner (Docker executor) |
 
 Each release will carry a CycloneDX SBOM listing every service's image and digest
 ([verifying-releases.md](verifying-releases.md)).
@@ -45,9 +46,10 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
 
 - **Dependabot** ([`.github/dependabot.yml`](../.github/dependabot.yml)) checks weekly for new image versions in the Compose file, new tool versions and new Action
   versions, and opens a pull request for each. Dependabot alerts and security updates are on.
-- The CI-only images in `run:` steps, the scripts' busybox image and the Minecraft server's version aren't seen
-  by Dependabot; they're bumped by hand at least every quarter (the Minecraft server whenever players' clients
-  need a newer one, since Bedrock clients usually join only a server of their own version).
+- The CI-only images in `run:` steps, the images in `.gitlab-ci.yml`, the scripts' busybox image and the
+  Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
+  Minecraft server whenever players' clients need a newer one, since Bedrock clients usually join only a server
+  of their own version).
 - **Patch and minor updates merge automatically** once every required check has passed (CI with the Compose
   policy check and the smoke test, CodeQL, dependency review).
 - **Major updates are merged by hand**, after reading the service's release notes: a new major version can

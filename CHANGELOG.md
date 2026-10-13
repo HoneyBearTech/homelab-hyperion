@@ -6,6 +6,36 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Label `org.honeybeartech.hyperion.backup.exclude`: comma-separated paths at any depth inside a service's data
+  mount that `scripts/backup.sh` leaves out of the mount's archive and `scripts/restore.sh` leaves in place. A path
+  outside every data mount, or with `..` or a pattern character, fails the backup and the restore before anything
+  stops. No service uses it yet.
+- Every backup has a `NETWORKS` file (the address range of each network the stack joins but doesn't create, so a
+  rebuilt host can recreate it the same; this stack creates its own networks, so the file holds only its header)
+  and a `VERSION` file (the checkout's `git describe`, the release the host ran). The smoke test checks both.
+- `.gitlab-ci.yml`, for a copy of the repository on the maintainer's self-hosted GitLab: a scheduled job mirrors
+  GitHub into it, and every commit there re-runs the checks that need no Docker daemon. It does nothing until
+  that GitLab project, its `MIRROR_TOKEN` variable and the schedule exist.
+
+### Changed
+
+- The tooling (checker, backup scripts, smoke test, workflows) follows homelab-ares, the template for the homelab
+  stacks; only what is specific to this host's services differs.
+- A mount inside another mount is archived on its own and left out of the outer mount's archive, and a restore of
+  the outer mount leaves it in place. No service here has one, and the `backup.skip` label (qBittorrent's
+  `/downloads`) works as before: backups hold exactly the same data.
+- CI logs in to Docker Hub with a read-only token, when the project has one, for its image pulls and the image
+  scan, and logs out before the smoke test starts any container; without the token it pulls anonymously, as
+  before.
+- `scripts/scheduled-backup.sh` retries the Uptime Kuma push for two minutes instead of 25 seconds.
+
+### Upgrading
+
+- Nothing to do on the host. The systemd units in `deploy/systemd/` haven't changed (they already run the backup
+  in the best-effort I/O class at the lowest priority), so they needn't be re-installed.
+
 ## [0.1.1] - 2026-10-13
 
 ### Fixed
