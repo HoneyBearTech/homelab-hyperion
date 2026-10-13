@@ -73,8 +73,8 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
   and `docs/interfaces.md`.
 - **Container paths and ports are load-bearing**: Sonarr, Radarr and Lidarr on another host reach Prowlarr and
   qBittorrent by their published ports, qBittorrent's saved torrents record their download paths, and players
-  reach the Minecraft server on its UDP port. Adopt the existing data and keep paths and ports the same; see the
-  cutover plan in Chronos.
+  reach the Minecraft server on TCP 19132 and UDP 19140–19149 (NetherNet). Adopt the existing data and keep
+  paths and ports the same; see the cutover plan in Chronos.
 
 ## Stack
 - Docker Compose v2 (`compose.yaml`), upstream images: Prowlarr, qBittorrent, Heimdall

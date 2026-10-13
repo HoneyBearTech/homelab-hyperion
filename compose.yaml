@@ -117,6 +117,7 @@ services:
       autoheal: "true"
     healthcheck:
       <<: *healthcheck
+      # mc-monitor detects the transport (NetherNet here) by itself.
       test: ["CMD", "mc-monitor", "status-bedrock", "--host", "127.0.0.1", "--port", "19132"]
     environment:
       EULA: ${MINECRAFT_EULA:?set MINECRAFT_EULA=TRUE in .env to accept the Minecraft EULA}
@@ -128,8 +129,15 @@ services:
       LEVEL_NAME: ${MINECRAFT_LEVEL_NAME:?set MINECRAFT_LEVEL_NAME in .env}
       # Only the players in allowlist.json (in the data directory) can join.
       ALLOW_LIST: "true"
+      # Since 1.26.50 clients connect only over NetherNet: a handshake on TCP 19132, then one UDP port per player
+      # from this range (max-players is 10). The server tells each client the address and port to use, so it must
+      # name an address the players can reach: the host's LAN address. LAN discovery (UDP broadcast) doesn't cross
+      # Docker's network; players add the server by address.
+      TRANSPORT: nethernet
+      SERVER_UDP_PORTS: ${MINECRAFT_ADDRESS:?set MINECRAFT_ADDRESS in .env}:19140-19149:19140-19149
     ports:
-      - "19132:19132/udp"
+      - "19132:19132/tcp"
+      - "19140-19149:19140-19149/udp"
     volumes:
       - ${MINECRAFT_DATA_PATH:?set MINECRAFT_DATA_PATH in .env}:/data
 

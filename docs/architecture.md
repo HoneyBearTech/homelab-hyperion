@@ -35,7 +35,7 @@ come from their own projects; this stack doesn't include or manage them.
 | LAN users | Use the web UIs, usually through the homelab's reverse proxy |
 | Sonarr, Radarr, Lidarr (another host) | Call Prowlarr's and qBittorrent's APIs: search through Prowlarr, add torrents to qBittorrent, read their progress |
 | BitTorrent peers and trackers | Exchange data with qBittorrent on its listening port |
-| Minecraft players | Connect to the Bedrock server on its UDP port |
+| Minecraft players | Connect to the Bedrock server: a NetherNet handshake on TCP 19132, then gameplay on a UDP port from 19140–19149 |
 | autoheal | Watches health through the socket proxy and restarts unhealthy containers |
 
 ## Data flow

@@ -21,10 +21,12 @@ setting marked required stops `docker compose` with an error naming it when it's
 | `DOZZLE_REMOTE_AGENT` | no | `agent-one.example.com:7007` | Dozzle agents on other hosts (`host:port`, comma-separated) whose containers Dozzle also shows. Empty: this host only. |
 | `MINECRAFT_DATA_PATH` | yes | `/srv/appdata/minecraft-bedrock` | The Minecraft server's worlds, settings and allowlist. |
 | `MINECRAFT_LEVEL_NAME` | yes | `Bedrock level` | The world the server opens: the name of its folder under `worlds/` in `MINECRAFT_DATA_PATH`. A new installation starts a new world with this name. |
+| `MINECRAFT_ADDRESS` | yes | `192.0.2.10` | The address players reach this host at (an IP literal, not a hostname). The server hands it to each client with its gameplay port. |
 | `MINECRAFT_EULA` | yes | `TRUE` | Accepts the [Minecraft EULA](https://www.minecraft.net/eula); must be `TRUE` for the server to start. |
 
 The Bedrock Dedicated Server's version is not a setting: it is pinned in `compose.yaml` (`VERSION`), like the
-images, and so is its allowlist (on). Its other game settings live in `server.properties` in its data directory.
+images, and so are its allowlist (on) and its transport (NetherNet, the only one clients use since 1.26.50).
+Its other game settings live in `server.properties` in its data directory.
 
 No secret is a setting. A service that needs one in its environment gets its own gitignored `<service>.env`
 (mode `600`) with a committed `<service>.env.example`, listed below.
@@ -62,7 +64,8 @@ Only directories named like a backup (`<date>-<time>`) are ever deleted, here or
 | | | 6881 → 6881 (TCP and UDP) | BitTorrent listening port (the one port meant for the internet, if forwarded) |
 | Heimdall | `lscr.io/linuxserver/heimdall` | 80 → 80, 443 → 443 | Start page over HTTP and HTTPS (self-signed) (LAN only) |
 | Dozzle | `amir20/dozzle` | 4040 → 8080 | Log viewer web UI (LAN only) |
-| Minecraft Bedrock server | `itzg/minecraft-bedrock-server` | 19132 → 19132 (UDP) | Bedrock game port (IPv4) |
+| Minecraft Bedrock server | `itzg/minecraft-bedrock-server` | 19132 → 19132 (TCP) | NetherNet handshake (IPv4 and IPv6) |
+| | | 19140–19149 → 19140–19149 (UDP) | NetherNet gameplay, one port per player (`max-players` 10) |
 | autoheal | `willfarrell/autoheal` | none | Restarts unhealthy containers, through the socket proxy |
 | socket proxy | `lscr.io/linuxserver/socket-proxy` | none (internal network only) | Filtered Docker API for autoheal |
 
