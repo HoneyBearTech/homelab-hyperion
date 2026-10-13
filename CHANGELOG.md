@@ -15,6 +15,8 @@ All notable changes to homelab-hyperion are documented here. The format follows
   Minecraft server runs as `PUID`:`PGID` with its allowlist on, and won't start until `MINECRAFT_EULA=TRUE`.
 - `autoheal.env.example`: an optional webhook for autoheal's restart notices, kept in the gitignored
   `autoheal.env`.
+- Image updates after the first scan: Dozzle `v11.3.2`, Heimdall `v2.8.3-ls366` and the Minecraft image
+  `2026.10.0`; the first triage is recorded in `docs/dependencies.md`.
 - Documentation: quick start, installing, upgrading, rebuilding, architecture, interfaces, security
   requirements, assurance case, dependencies, roadmap and verifying releases.
 - `.env.example` with every setting the stack reads, and a `.gitignore` that keeps settings,

@@ -64,7 +64,7 @@ services:
 
   # --- Start page and logs --------------------------------------------------------------------------------------
   heimdall:
-    image: lscr.io/linuxserver/heimdall:v2.8.3-ls365@sha256:4c2b77d7e391ac794ee7504839ed699a7f98309f853670ee45a7712a14c41001
+    image: lscr.io/linuxserver/heimdall:v2.8.3-ls366@sha256:3c9e97c416c7f6d72a3fc12af01a37bd0e71d9e6588d25c40b47e391f39ff7fd
     container_name: heimdall
     restart: unless-stopped
     labels:
@@ -83,7 +83,7 @@ services:
       - ${HEIMDALL_CONFIG_PATH:?set HEIMDALL_CONFIG_PATH in .env}:/config
 
   dozzle:
-    image: amir20/dozzle:v11.3.0@sha256:a7d69d20891d3dcc82636e24afa4c1c162b41d0673ef798b14f09e6b69accc5a
+    image: amir20/dozzle:v11.3.2@sha256:0d8cf9702f422d65a7e8ad238785dc6b05b2b9c43c945f6bbdf3358ad5da5f6c
     container_name: dozzle
     restart: unless-stopped
     healthcheck:
@@ -108,7 +108,7 @@ services:
   # is a reviewed change (Dependabot doesn't see it). Other game settings live in server.properties in the data
   # directory; the image rewrites only the ones set below.
   minecraft:
-    image: itzg/minecraft-bedrock-server:2026.9.2@sha256:244e72a36a3e3d69c588cbeefe6d8f6f97c48869b801718a4023570654e3b3d9
+    image: itzg/minecraft-bedrock-server:2026.10.0@sha256:0e0eaf6cabd90f6aff4c31a97f7f01aef780ced92de7a1304acdcd519e99b4f0
     container_name: minecraft
     restart: unless-stopped
     # On stop the image tells the server to save and shut down; give it time to write the world.

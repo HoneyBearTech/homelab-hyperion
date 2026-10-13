@@ -11,7 +11,7 @@ file changes with them, in the same pull request.
   behind a socket proxy, every image pinned by tag and digest for `linux/amd64` and the Minecraft server's
   version pinned too, a health check on every service, Dependabot proposing updates; the smoke test (including
   an autoheal restart) and the image scan run against it in CI.
-- Triage the first image scan ([dependencies.md](dependencies.md#current-findings)).
+- Done: the first image scan, triaged ([dependencies.md](dependencies.md#current-findings)).
 - First release (0.1.0) before Hyperion switches over, so the server is first deployed from a signed, verified
   version.
 - Switch Hyperion to run the stack from a checkout of this repository, adopting the existing data, ports and

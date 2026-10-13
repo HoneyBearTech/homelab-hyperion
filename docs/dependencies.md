@@ -79,8 +79,36 @@ reported to code scanning). Each finding is triaged within 14 days:
 
 ### Current findings
 
-None recorded yet: the first scan of the stack's images runs when `compose.yaml` reaches `main`, and its triage
-is recorded here.
+Triaged 13 October 2026, after the first image scan (283 alerts, every one HIGH or CRITICAL with a fixed package
+version somewhere upstream). Every image is maintained. autoheal and the socket proxy had none.
+
+**Fixed by a bump.** Dozzle `v11.3.2` (all 4: the Go standard library and `golang.org/x/net`), Heimdall
+`v2.8.3-ls366` (9 of 20: Alpine's `apache2-utils` and `pcre2`) and the Minecraft image `2026.10.0` (12 of 40:
+Debian's OpenSSL and PCRE2, `mc-monitor`'s Go dependencies). The Minecraft server's own version is unchanged.
+
+**Accepted until the planned upgrade: qBittorrent 4.5.5** (171, 8 of them critical). The stack starts on the
+version the server already runs, so moving to it changes one thing at a time; the upgrade to 5.x follows in its
+own pull request ([roadmap](roadmap.md)), and no 4.x build is newer than 2024. Nearly all the findings are in
+the image's 2023 Alpine packages (OpenSSL 3.1.3, expat, PCRE2, curl, Python, musl, zlib). Two of the critical
+ones don't apply: CVE-2024-3094 is the xz backdoor, which only ever shipped in xz 5.6.0 and 5.6.1 (the image has
+5.4.4), and CVE-2026-31789 affects OpenSSL on 32-bit systems only. qBittorrent's own finding, CVE-2024-51774
+(before 5.0.1 it keeps using an HTTPS connection whose certificate failed validation), is reachable only from
+the network path of what qBittorrent fetches over HTTPS itself: RSS feeds, torrent URLs, its GeoIP database.
+Mitigated by keeping the web UI on the LAN and forwarding only the listening port
+([installing.md](installing.md#running-it-securely)).
+
+**Open, waiting for upstream** (87). No newer image exists yet with the fixed package; each alert closes by
+itself when Dependabot's bump to such an image is merged and the scan runs again.
+
+- **The .NET runtime bundled into Prowlarr (8.0.27, 48; fixed in 8.0.30).** The pinned build is Prowlarr's
+  newest release. Reachable through its web UI and API; mitigated by keeping them on the LAN with
+  authentication on. Fixed when Prowlarr ships a release on a newer runtime.
+- **PHP libraries vendored by Heimdall (11):** `league/commonmark`, `guzzlehttp/guzzle` and
+  `squizlabs/php_codesniffer` (a development tool that the web app never runs). Fixed when Heimdall updates its
+  dependencies; Heimdall's UI stays on the LAN.
+- **The Go standard library in the Minecraft image's helper tools (28):** `set-property`, `entrypoint-demoter`,
+  `easy-add` and `mc-server-runner`, built with Go 1.26.3 to 1.26.6. They run at start, on local files and the
+  server process, and don't listen on the network. Fixed when the image rebuilds them with a newer Go.
 
 ## Licenses
 
