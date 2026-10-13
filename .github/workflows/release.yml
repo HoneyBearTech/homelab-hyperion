@@ -33,8 +33,11 @@ jobs:
 
       # The release must meet the same policy as main: every image pinned by digest, nothing privileged.
       - name: Policy check and SBOM
+        # Resolving the file needs the Minecraft EULA accepted (compose.yaml refuses an empty MINECRAFT_EULA); this
+        # only reads the file, nothing runs. The variable overrides the empty value in .env.example.
         env:
           TAG: ${{ github.ref_name }}
+          MINECRAFT_EULA: "TRUE"
         run: |
           version="${TAG#v}"
           if [ ! -f compose.yaml ]; then

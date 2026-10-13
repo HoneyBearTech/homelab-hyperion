@@ -1,8 +1,5 @@
 # Quick start
 
-> **Planned:** `compose.yaml` isn't in the repository yet, so step 4 has nothing to start. The steps are the
-> ones the stack will use.
-
 You need a Linux host on amd64 (the reference is Ubuntu 24.04) with Docker Engine and the Compose v2 plugin, a
 user in the `docker` group, and the host ports the services use free ([installing.md](installing.md#requirements)).
 
@@ -22,11 +19,14 @@ user in the `docker` group, and the host ports the services use free ([installin
    ```
 
    In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directory), `DOWNLOADS_PATH`, the
-   data paths, and `MINECRAFT_EULA=TRUE` once you've read and accepted the
-   [Minecraft EULA](https://www.minecraft.net/eula). Every setting is described in
+   data paths, `MINECRAFT_LEVEL_NAME` (the world's name), and `MINECRAFT_EULA=TRUE` once you've read and
+   accepted the [Minecraft EULA](https://www.minecraft.net/eula). Every setting is described in
    [interfaces.md](interfaces.md#settings).
 
-3. **Create the data directories** as your user, so Docker doesn't create them owned by root:
+   Optionally, for a notice each time autoheal restarts a container, put a webhook URL in `autoheal.env`
+   (`cp autoheal.env.example autoheal.env && chmod 600 autoheal.env`).
+
+3. **Create the data directories** as the `PUID`/`PGID` user, so Docker doesn't create them owned by root:
 
    ```sh
    . ./.env && mkdir -p "$PROWLARR_CONFIG_PATH" "$QBITTORRENT_CONFIG_PATH" "$DOWNLOADS_PATH" \
@@ -43,7 +43,7 @@ user in the `docker` group, and the host ports the services use free ([installin
 
 5. **Finish each service's setup in its web UI** (ports in [interfaces.md](interfaces.md#services-and-ports)).
    qBittorrent prints a temporary web UI password in its log (`docker compose logs qbittorrent`): sign in and
-   change it. In Prowlarr, set a login, add your indexers and connect the media apps. In the Minecraft server's
-   `allowlist.json`, name the players who may join.
+   change it. In Prowlarr, set a login, add your indexers and connect the media apps. The Minecraft server's
+   allowlist is on: until you name the players in `allowlist.json` (in `MINECRAFT_DATA_PATH`), nobody can join.
 
 To upgrade later, follow [upgrading.md](upgrading.md); it starts with a backup.

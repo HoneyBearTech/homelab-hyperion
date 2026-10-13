@@ -5,16 +5,18 @@ file changes with them, in the same pull request.
 
 ## Now: the stack in git
 
-- The checks, backup and restore scripts, smoke test, release signing and project policies, ported from the
-  sibling homelab stacks: backups skip the downloads directory.
-- `compose.yaml` with Prowlarr, qBittorrent, Heimdall, Dozzle, the Minecraft Bedrock server, and autoheal behind
-  a socket proxy, every image pinned by tag and digest for `linux/amd64` and the Minecraft server's version
-  pinned too, a health check and the autoheal label on every service, Dependabot proposing updates.
-- The smoke test (including an autoheal restart) and the image scan running against the real stack in CI.
+- Done: the checks, backup and restore scripts, smoke test, release signing and project policies, ported from
+  the sibling homelab stacks (backups skip the downloads directory).
+- Done: `compose.yaml` with Prowlarr, qBittorrent, Heimdall, Dozzle, the Minecraft Bedrock server, and autoheal
+  behind a socket proxy, every image pinned by tag and digest for `linux/amd64` and the Minecraft server's
+  version pinned too, a health check on every service, Dependabot proposing updates; the smoke test (including
+  an autoheal restart) and the image scan run against it in CI.
+- Triage the first image scan ([dependencies.md](dependencies.md#current-findings)).
 - First release (0.1.0) before Hyperion switches over, so the server is first deployed from a signed, verified
   version.
 - Switch Hyperion to run the stack from a checkout of this repository, adopting the existing data, ports and
   download paths so nothing that reaches the server notices.
+- Then upgrade qBittorrent from 4.5.5 to 5.x, in its own pull request.
 
 ## Next: safe upgrades and rebuilds
 

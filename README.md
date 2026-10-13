@@ -14,10 +14,6 @@ Docker Compose stack for Hyperion, a homelab Ubuntu server (24.04, amd64). Versi
 > public IP address. Keep every web UI on your LAN, and back up the services' data before every upgrade
 > ([docs/upgrading.md](docs/upgrading.md)).
 
-> [!NOTE]
-> **Planned:** the stack itself (`compose.yaml`) isn't in the repository yet. The documentation describes what
-> it will be; everything not built yet is marked **Planned**.
-
 ## Documentation
 
 - [Quick start](docs/quick-start.md): getting the stack running on a fresh Docker host
@@ -36,7 +32,8 @@ Docker Compose stack for Hyperion, a homelab Ubuntu server (24.04, amd64). Versi
 
 ## What's in the stack
 
-**Planned** ([architecture](docs/architecture.md), ports in [interfaces](docs/interfaces.md#services-and-ports)):
+[`compose.yaml`](compose.yaml) runs ([architecture](docs/architecture.md), ports in
+[interfaces](docs/interfaces.md#services-and-ports)):
 
 - **Prowlarr**: manages indexers for Sonarr, Radarr and Lidarr, which run elsewhere
 - **qBittorrent**: the BitTorrent client those apps send downloads to
@@ -47,13 +44,13 @@ Docker Compose stack for Hyperion, a homelab Ubuntu server (24.04, amd64). Versi
   wrapper image
 - **autoheal**, behind a **socket proxy**: restarts any container whose health check fails
 
-Every service will have a health check, and every image will be pinned by tag **and** digest, for
-`linux/amd64`. The Minecraft server's own version is pinned in `compose.yaml` too, never `LATEST`. New versions arrive as Dependabot pull
-requests that CI checks and the maintainer merges; nothing on the host updates itself.
+Every service has a health check, and every image is pinned by tag **and** digest, for `linux/amd64`. The
+Minecraft server's own version is pinned in `compose.yaml` too, never `LATEST`. New versions arrive as Dependabot
+pull requests that CI checks and the maintainer merges; nothing on the host updates itself.
 
 ## Getting started
 
-**Planned**, once `compose.yaml` exists:
+On a Docker host ([requirements](docs/installing.md#requirements)):
 
 ```sh
 git clone https://github.com/HoneyBearTech/homelab-hyperion.git && cd homelab-hyperion
@@ -78,19 +75,21 @@ Upgrading to a new release: [docs/upgrading.md](docs/upgrading.md).
 
 ## Configuration
 
-Settings come from `.env` (template [`.env.example`](.env.example)), which holds no secrets. **Planned**: the
-list is settled when the stack is added.
+Settings come from `.env` (template [`.env.example`](.env.example)), which holds no secrets. The one secret,
+autoheal's optional restart webhook, goes in the gitignored `autoheal.env` (template
+[`autoheal.env.example`](autoheal.env.example)); without it, restarts are only logged.
 
 | Setting | Default in `.env.example` | Meaning |
 | --- | --- | --- |
 | `TZ` | `Etc/UTC` | Time zone |
-| `PUID`, `PGID` | `1000` | User and group the linuxserver.io services run as; must be able to write the downloads directory |
+| `PUID`, `PGID` | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own the data directories and be able to write the downloads directory |
 | `PROWLARR_CONFIG_PATH` | `/srv/appdata/prowlarr` | Prowlarr's database and settings |
 | `QBITTORRENT_CONFIG_PATH` | `/srv/appdata/qbittorrent` | qBittorrent's settings and torrent list |
 | `DOWNLOADS_PATH` | `/srv/downloads` | Where qBittorrent saves downloads (never backed up by this stack) |
 | `HEIMDALL_CONFIG_PATH` | `/srv/appdata/heimdall` | Heimdall's database and settings |
 | `DOZZLE_REMOTE_AGENT` | *(empty)* | Dozzle agents on other hosts (`host:port`, comma-separated) whose logs Dozzle also shows |
 | `MINECRAFT_DATA_PATH` | `/srv/appdata/minecraft-bedrock` | The Minecraft server's worlds and settings |
+| `MINECRAFT_LEVEL_NAME` | `Bedrock level` | The world the server opens: its folder under `worlds/` |
 | `MINECRAFT_EULA` | *(empty)* | Set to `TRUE` to accept the [Minecraft EULA](https://www.minecraft.net/eula); the server won't start otherwise |
 
 Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
@@ -102,12 +101,12 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
 - Dozzle can read every container's logs through the Docker socket, and those of every host whose Dozzle agent
   it connects to, and logs can hold secrets. It mounts the
   socket read-only, but that doesn't limit the API: treat its web UI as admin access to the host.
-- autoheal reaches Docker only through the socket proxy, which lets it list, inspect and restart containers
-  and nothing else.
+- autoheal reaches Docker only through the socket proxy, which lets it list, inspect, restart and stop
+  containers and nothing else.
 - qBittorrent's peers see your public IP address. Whether to route it through a VPN is your call; this stack
   doesn't include one.
-- Only forward the Minecraft server's UDP port to the internet if you mean to host players from outside your
-  LAN, and keep the server's allowlist on.
+- The Minecraft server's allowlist is on: only the players in its `allowlist.json` can join. Only forward its
+  UDP port to the internet if you mean to host players from outside your LAN.
 - Secrets (logins, indexer API keys, webhook URLs) live only in each service's data or its own gitignored
   `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host.
 - Don't run an auto-updater such as Watchtower on these containers; upgrade by release instead.

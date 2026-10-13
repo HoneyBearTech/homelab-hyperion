@@ -3,8 +3,8 @@
 How homelab-hyperion chooses, obtains, tracks and updates what it's built from, and what happens when one of
 those dependencies has a vulnerability.
 
-homelab-hyperion's dependencies are almost entirely the **container images** it runs (**Planned**: they arrive with
-`compose.yaml`). The rest are the tools its checks and tests use and the GitHub Actions in its workflows. Its
+homelab-hyperion's dependencies are almost entirely the **container images** it runs, pinned in
+[`compose.yaml`](../compose.yaml). The rest are the tools its checks and tests use and the GitHub Actions in its workflows. Its
 own code, the policy checker, uses only the Python standard library.
 
 ## Choosing a dependency
@@ -31,9 +31,9 @@ Bedrock clients can only join a Bedrock server. It runs with no added privileges
 
 | Dependency | Declared in | Pinned by | Fetched by |
 | --- | --- | --- | --- |
-| The stack's images (**Planned**) | `compose.yaml` | version tag and digest | `docker compose pull` |
+| The stack's images | `compose.yaml` | version tag and digest | `docker compose pull` |
 | Check and test tools (pytest, coverage, ruff, yamllint, shellcheck) | [`requirements-dev.in`](../requirements-dev.in) → [`requirements-dev.txt`](../requirements-dev.txt) | exact version and SHA-256 hashes (`pip-compile --generate-hashes`) | `pip install --require-hashes --no-deps` |
-| The Bedrock Dedicated Server (**Planned**) | `compose.yaml` (the image's `VERSION`) | exact version | the image, from Minecraft's site, on start |
+| The Bedrock Dedicated Server | `compose.yaml` (the image's `VERSION`) | exact version | the image, from Minecraft's site, on start |
 | Helper image for backups and the smoke test (busybox) | [`scripts/lib.sh`](../scripts/lib.sh) | version tag and digest | Docker |
 | Linters and scanners used only by CI (actionlint, gitleaks, Trivy) | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scan.yml`](../.github/workflows/scan.yml) | version tag and digest | Docker |
 | GitHub Actions | [`.github/workflows/`](../.github/workflows/) | full commit SHA (version in a comment) | GitHub Actions |
@@ -52,6 +52,9 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   policy check and the smoke test, CodeQL, dependency review).
 - **Major updates are merged by hand**, after reading the service's release notes: a new major version can
   migrate its data one way.
+- **qBittorrent is held at 4.5.5** for now: Dependabot ignores it until the server has moved to this stack, so
+  the move changes one thing at a time. The upgrade to 5.x is its own pull request, with a backup first, and
+  removes the `ignore` entry.
 - **A merge doesn't deploy.** The server runs what it last pulled; updates reach it when the operator pulls
   and redeploys, with a backup first ([upgrading.md](upgrading.md)).
 - **Dependency review** blocks a pull request that adds or changes a Python or Actions dependency with a known
@@ -76,8 +79,8 @@ reported to code scanning). Each finding is triaged within 14 days:
 
 ### Current findings
 
-None: there are no images in the stack yet. The first scan runs when `compose.yaml` is added, and its triage is
-recorded here.
+None recorded yet: the first scan of the stack's images runs when `compose.yaml` reaches `main`, and its triage
+is recorded here.
 
 ## Licenses
 

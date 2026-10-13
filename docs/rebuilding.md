@@ -3,8 +3,8 @@
 How to bring the stack back on a new or wiped machine from a backup made by `scripts/backup.sh`
 ([upgrading.md](upgrading.md#backing-up)), with every service's settings, history and worlds as they were.
 
-> **Planned:** this needs `compose.yaml`, which isn't in the repository yet. The backup and restore scripts
-> exist; the rebuild is rehearsed once the stack is in place.
+> **Planned:** this rebuild hasn't been rehearsed on a scratch machine yet ([roadmap](roadmap.md)). The backup
+> and restore round trip it relies on runs in CI on every change.
 
 You need: the backup directory (copied off the old host), this repository, and the downloads storage if it's a
 network share.

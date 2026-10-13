@@ -3,8 +3,7 @@
 What homelab-hyperion is meant to guarantee, what it leaves to the operator and the services, and where secrets
 live. The reasoning behind these requirements is in the [assurance case](assurance-case.md).
 
-> **Planned:** requirements 1 and 2 apply to `compose.yaml`, which isn't in the repository yet; the checker that
-> enforces them already runs in CI and is tested. Requirements 3 to 6 apply now (5 from the first release).
+> **Planned:** requirement 5 takes effect with the first release.
 
 ## What homelab-hyperion protects
 
@@ -13,8 +12,8 @@ live. The reasoning behind these requirements is in the [assurance case](assuran
    what `docker compose pull` fetches; a new version arrives only as a pull request that changes the pin.
 2. **No container gets more of the host than it needs.** No service runs privileged, adds Linux
    capabilities, shares the host's network or PID namespace, or mounts the Docker socket (which is root on
-   the host), unless the exception is written into the service as a reasoned label and reviewed. Two exceptions
-   are planned: Dozzle (read-only mount, to read logs) and the socket proxy (which gives autoheal a filtered API
+   the host), unless the exception is written into the service as a reasoned label and reviewed. There are two
+   exceptions: Dozzle (read-only mount, to read logs) and the socket proxy (which gives autoheal a filtered API
    instead of the socket).
 3. **No secrets in the repository.** The services keep their logins, indexer credentials and API keys in their
    own data, outside the repository. `.env` holds settings only. Secret scanning with push protection and a
@@ -70,5 +69,5 @@ a non-empty reason:
 | --- | --- | --- |
 | Logins of the services that have them (Prowlarr, qBittorrent, optionally Heimdall and Dozzle) | each service's data | the repository, `.env`, issues, logs you paste |
 | Indexer credentials and API keys; the media apps' API keys | Prowlarr's data | same |
-| autoheal's notification webhook URL (optional, **Planned**) | the gitignored `autoheal.env` | same |
+| autoheal's notification webhook URL (optional) | the gitignored `autoheal.env`, mode `600` | same |
 | Backups of the data | off the host, mode `600` | anywhere public |

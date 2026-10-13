@@ -7,9 +7,10 @@
 #
 # It stays away from any real installation on the same Docker host: its own Compose project, settings from
 # .env.example with every directory (*_ROOT, *_PATH) moved into a temporary directory, every volume and network
-# name (*_VOLUME, *_NETWORK) and name prefix (*_PREFIX) replaced by one of its own, no fixed container names, no
-# published ports and no service env files. It never reads .env, ignores the stack's settings in the environment,
-# and on exit removes only the volumes Compose labelled with its own project and the networks it created.
+# name (*_VOLUME, *_NETWORK) and name prefix (*_PREFIX) replaced by one of its own, licenses (*_EULA) accepted,
+# no fixed container names, no published ports and no service env files. It never reads .env, ignores the
+# stack's settings in the environment, and on exit removes only the volumes Compose labelled with its own project
+# and the networks it created.
 set -euo pipefail
 
 project=homelab-hyperion-smoke
@@ -68,6 +69,9 @@ while IFS= read -r line; do
     *_PREFIX) value=${project}_ ;;
     *_VOLUME) value=${project}_$(echo "$key" | tr 'A-Z_' 'a-z-') ;;
     *_NETWORK) value=${project}_$(echo "$key" | tr 'A-Z_' 'a-z-') ;;
+    # A license the operator accepts in .env (left empty in .env.example): accepted for this throwaway run only,
+    # so the service it gates can be tested. The maintainer agreed to this for the Minecraft EULA.
+    *_EULA) value=TRUE ;;
     *) value=${line#*=} ;;
   esac
   printf '%s=%s\n' "$key" "$value"
