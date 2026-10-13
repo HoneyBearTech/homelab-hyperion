@@ -38,6 +38,21 @@ Read by the `autoheal` service (template: [`autoheal.env.example`](../autoheal.e
 | --- | --- |
 | `WEBHOOK_URL` | Where autoheal posts a notice each time it restarts a container (a secret). A Discord channel webhook works as is; empty or missing = log only |
 
+### `backup.env`
+
+Read by `scripts/scheduled-backup.sh` (template: [`backup.env.example`](../backup.env.example)); optional, mode
+`600`, gitignored. Read as data, never run: only these keys, one `KEY=value` per line; anything else is an error.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `BACKUP_DIR` | `backups` | Where backups are written (relative to the checkout, or absolute). |
+| `BACKUP_KEEP` | `3` | How many backups are kept in `BACKUP_DIR`; older ones are deleted. |
+| `BACKUP_REMOTE` | empty | rsync destination each backup is copied to, such as `backup-host:/volume1/hyperion-backups` (an SSH alias); empty = no copy. |
+| `BACKUP_REMOTE_KEEP` | `30` | How many backups are kept at `BACKUP_REMOTE`; older ones are deleted. |
+| `BACKUP_PING_URL` | empty | An Uptime Kuma push URL (a secret), told `up` after each good run and `down` after a failed one. |
+
+Only directories named like a backup (`<date>-<time>`) are ever deleted, here or at the remote.
+
 ## Services and ports
 
 | Service | Image | Host port → container | What |
@@ -91,9 +106,10 @@ published; autoheal also joins the default network, to reach its webhook.
 | `make check` | `docker compose config --format json \| python scripts/check_compose.py`: the policy check |
 | `python scripts/check_compose.py [FILE] [--sbom OUT]` | Checks a resolved Compose config (from `FILE` or stdin); `--sbom` also writes a CycloneDX 1.6 SBOM of the images. Exit 0 = no violations, 1 = violations (one line each), 2 = unreadable input |
 | `make test`, `make lint` | The checker's tests and the linters |
-| `scripts/backup.sh [DIR]` | Stops the stack, archives every service's data mounts (every read-write volume or bind mount except the Docker socket, anonymous volumes and the paths in the service's `backup.skip` label: the downloads directory), `.env` and any `<service>.env` into `DIR` (default `backups/<date>-<time>`, gitignored) with a `MANIFEST` and `SHA256SUMS`, all mode `600`, then starts what was running |
+| `scripts/backup.sh [DIR]` | Stops each service in turn, only while it copies that service's data mounts (every read-write volume or bind mount except the Docker socket, anonymous volumes and the paths in the service's `backup.skip` label: the downloads directory), `.env` and any `<service>.env` into `DIR` (default `backups/<date>-<time>`, gitignored) with a `MANIFEST` and `SHA256SUMS`, all mode `600`, and starts each service again before compressing its archives (with pigz when it's installed) |
+| `scripts/scheduled-backup.sh` | Runs `scripts/backup.sh` into `BACKUP_DIR/<date>-<time>`, copies it to `BACKUP_REMOTE` with rsync (`SHA256SUMS` last), deletes all but the newest `BACKUP_REMOTE_KEEP` there and `BACKUP_KEEP` here, and reports to `BACKUP_PING_URL` ([`backup.env`](#backupenv)). Run nightly at 04:30 by the systemd user units in `deploy/systemd/` |
 | `scripts/restore.sh [--yes] DIR [SERVICE...]` | Verifies `DIR/SHA256SUMS`, checks the `MANIFEST`, asks for confirmation (unless `--yes`), stops the services, replaces the contents of each listed mount with its archive, and starts what was running. Writes only mounts the service still has read-write; never the Docker socket or a path in the service's `backup.skip` label |
-| `make smoke` | `scripts/smoke-test.sh`: starts every service under a separate Compose project with throwaway directories and no published ports, waits until all are healthy, round-trips a backup and restore over every data mount, checks that excluded mounts were neither archived nor overwritten and that autoheal restarts a container that turns unhealthy, then removes what it created. Exit 0 = all healthy and restored |
+| `make smoke` | `scripts/smoke-test.sh`: starts every service under a separate Compose project with throwaway directories and no published ports, waits until all are healthy, round-trips a backup and restore over every data mount, checks that excluded mounts were neither archived nor overwritten, runs the scheduled backup against a stand-in backup server and checks the copy and the pruning, checks that autoheal restarts a container that turns unhealthy, then removes what it created. Exit 0 = all healthy and restored |
 
 ## Outbound connections
 
@@ -103,6 +119,8 @@ APIs; qBittorrent to BitTorrent trackers, peers and the DHT; the Minecraft serve
 Bedrock Dedicated Server from Minecraft's website on start; Heimdall to the apps it shows live stats for, if
 configured; Prowlarr and qBittorrent may check for updates (which this stack doesn't apply). Dozzle to the local Docker
 API and to the Dozzle agents named in `DOZZLE_REMOTE_AGENT`; autoheal only to the socket proxy.
+
+The scheduled backup talks to `BACKUP_REMOTE` (rsync, usually over SSH) and `BACKUP_PING_URL`, if they are set.
 
 ## Release files
 

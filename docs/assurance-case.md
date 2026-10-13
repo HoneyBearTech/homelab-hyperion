@@ -73,7 +73,8 @@ on the host, or write access to `.env` or the services' data.
 - CI on every change: ruff (with the bandit rules), yamllint, actionlint, gitleaks over the history,
   shellcheck, pytest with a 90 % branch-coverage floor, `docker compose config`, the policy check, and a smoke
   test on amd64 that starts every pinned image, waits for its health check, round-trips a backup and restore,
-  checks that excluded mounts are left alone and that autoheal restarts an unhealthy container (a dynamic test
+  checks that excluded mounts are left alone, runs the scheduled backup against a stand-in backup server, and
+  checks that autoheal restarts an unhealthy container (a dynamic test
   of the stack and the scripts).
 - A weekly Trivy scan of every pinned image, and on every change to `compose.yaml` on `main`, into code scanning.
 - CodeQL (Python and Actions) on every pull request and weekly; OpenSSF Scorecard weekly; dependency

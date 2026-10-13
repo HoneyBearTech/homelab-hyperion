@@ -60,6 +60,9 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
   service carries `org.honeybeartech.hyperion.allow.<rule>: "<reason>"` and the owner agreed. Only Dozzle
   (read-only) and the socket proxy may have the socket; autoheal reaches Docker only through the proxy.
   `scripts/check_compose.py` enforces it in CI and in the release workflow.
+- **Nightly backups as on ares and helios** (owner 2026-10-13): `scripts/scheduled-backup.sh` from a systemd user
+  timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
+  service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.
 - **Every service has a health check** and the `autoheal: "true"` label (autoheal itself excepted, as on atlas).
 - **qBittorrent stays on 4.5.5** until after the cutover (Dependabot ignores it); the 5.x upgrade is its own PR,
   backup first, and removes the ignore entry.
@@ -79,10 +82,11 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
   proxy. Not in this repo: Plex, Tdarr, the Argus agent, the Portainer agent, the local Portainer server (to be
   retired).
 - Tooling (ported from homelab-deimos): `scripts/check_compose.py` (Python, standard library only:
-  policy check + CycloneDX SBOM), `scripts/backup.sh`, `restore.sh`, `smoke-test.sh`, `lib.sh` (bash, must run
-  on macOS' bash 3.2); ruff (`select = ["ALL"]`), yamllint, shellcheck, pytest + coverage (90 % branch floor),
-  pip-tools for the hash-pinned `requirements-dev.txt`. CI-only: actionlint, gitleaks, CodeQL, Scorecard,
-  dependency review, DCO, Trivy image scan, Dependabot auto-merge (patch/minor).
+  policy check + CycloneDX SBOM), `scripts/backup.sh`, `restore.sh`, `scheduled-backup.sh`, `smoke-test.sh`,
+  `lib.sh` (bash, must run on macOS' bash 3.2; `scheduled-backup.sh` also with macOS' openrsync, so no
+  `--chmod`); ruff (`select = ["ALL"]`), yamllint, shellcheck, pytest + coverage (90 % branch floor), pip-tools
+  for the hash-pinned `requirements-dev.txt`. CI-only: actionlint, gitleaks, CodeQL, Scorecard, dependency
+  review, DCO, Trivy image scan, Dependabot auto-merge (patch/minor).
 - Releases (`release.yml`, on a `v*.*.*` tag; it refuses to run without `compose.yaml`): policy check, source
   archive, CycloneDX SBOM, `SHA256SUMS` signed with cosign keyless, SLSA provenance, GitHub Release from the
   tag's `CHANGELOG.md` section. No images are built or published.
@@ -103,7 +107,8 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
 make test     # checker tests + coverage floor (no Docker, no network)
 make lint     # ruff check, ruff format --check, yamllint --strict, shellcheck -x
 make check    # docker compose config --format json | scripts/check_compose.py  (needs .env and compose.yaml)
-make smoke    # scripts/smoke-test.sh: throwaway project, healthy, backup/restore round trip (needs Docker)
+make smoke    # scripts/smoke-test.sh: throwaway project, healthy, backup/restore round trip, scheduled backup
+              # (needs Docker)
 make config   # docker compose config (resolved file)
 ```
 Release (only when the owner asks): as in homelab-ares' CLAUDE.md: CHANGELOG section in a PR, then a signed
