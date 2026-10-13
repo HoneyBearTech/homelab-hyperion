@@ -6,7 +6,8 @@ How to bring the stack back on a new or wiped machine from a backup made by `scr
 > **Planned:** this rebuild hasn't been rehearsed on a scratch machine yet ([roadmap](roadmap.md)). The backup
 > and restore round trip it relies on runs in CI on every change.
 
-You need: the backup directory (copied off the old host), this repository, and the downloads storage if it's a
+You need: the backup directory (copied off the old host; from the backup server, take the newest one that has a
+`SHA256SUMS`, since a copy that was cut off has none), this repository, and the downloads storage if it's a
 network share.
 
 ## 1. The operating system
@@ -68,7 +69,9 @@ its worlds: check out that release or a newer one.
 
 - **The downloads**: never backed up; torrents still in qBittorrent's list download again.
 - **Host settings**: the static address, the network share's mount, firewall rules, SSH keys, monitoring
-  agents.
+  agents, and the scheduled backup (its key for the backup server, the `~/.ssh/config` alias and the systemd
+  units: set them up again as [installing.md](installing.md#scheduled-backups) describes; `backup.env` comes back
+  from the backup's `env/`).
 - **Other machines' view of this one**: the media apps' settings, reverse proxy hosts, DNS records, router port
   forwards, anything that reaches Hyperion by address.
 - **Services from other projects** on the same host: restore them from their own backups.

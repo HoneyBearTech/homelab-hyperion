@@ -4,8 +4,8 @@ How homelab-hyperion chooses, obtains, tracks and updates what it's built from, 
 those dependencies has a vulnerability.
 
 homelab-hyperion's dependencies are almost entirely the **container images** it runs, pinned in
-[`compose.yaml`](../compose.yaml). The rest are the tools its checks and tests use and the GitHub Actions in its workflows. Its
-own code, the policy checker, uses only the Python standard library.
+[`compose.yaml`](../compose.yaml). The rest are the tools its checks and tests use and the GitHub Actions in its
+workflows. Its own code, the policy checker, uses only the Python standard library.
 
 ## Choosing a dependency
 

@@ -78,9 +78,11 @@ Nothing on the host updates itself: a version that runs is always a version that
 | --- | --- |
 | `compose.yaml` | The stack |
 | `.env.example` | Template for the settings |
-| `autoheal.env.example` | Template for autoheal's optional restart webhook (the one secret) |
+| `autoheal.env.example` | Template for autoheal's optional restart webhook (a secret) |
+| `backup.env.example` | Template for the scheduled backup's settings |
 | `scripts/check_compose.py` | The policy check and SBOM generator (standard-library Python) |
 | `scripts/backup.sh`, `scripts/restore.sh` | Backup and restore of every service's data, never the downloads |
+| `scripts/scheduled-backup.sh`, `deploy/systemd/` | Nightly backup, copied off the host with rsync and pruned, reported to an Uptime Kuma push monitor |
 | `scripts/smoke-test.sh` | Starts the stack in isolation, waits for health, and round-trips a backup |
 | `tests/` | The checker's tests, with JSON fixtures |
 | `docs/` | This documentation |

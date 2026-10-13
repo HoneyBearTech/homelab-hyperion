@@ -1,0 +1,17 @@
+# Runs scripts/scheduled-backup.sh once; started by homelab-hyperion-backup.timer. A systemd user unit: install it for
+# the user who runs the stack (docs/installing.md#scheduled-backups). %h is that user's home directory: change
+# both paths if the checkout lives elsewhere.
+[Unit]
+Description=Back up the homelab-hyperion stack and copy it off the host
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/homelab-hyperion
+ExecStart=%h/homelab-hyperion/scripts/scheduled-backup.sh
+# Runs at a low priority, so the services stay responsive while archives are compressed. Not the idle I/O class: a
+# service is stopped while its data is copied, and idle I/O waits behind every other disk user on the host.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

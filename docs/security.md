@@ -23,9 +23,9 @@ live. The reasoning behind these requirements is in the [assurance case](assuran
 5. **Releases are verifiable.** Release files are listed in a `SHA256SUMS` signed keylessly by the release
    workflow, with SLSA provenance and an SBOM of the pinned images ([verifying-releases.md](verifying-releases.md)).
 6. **Backups don't leak and can't reach the downloads.** `scripts/backup.sh` writes archives readable only by
-   the user who ran it, and `scripts/restore.sh` writes only the mounts the backup's checksummed `MANIFEST` lists
-   and the service still has, never the downloads directory or any other path a service excludes with its
-   `org.honeybeartech.hyperion.backup.skip` label.
+   the user who ran it (the scheduled copy off the host keeps those modes), and `scripts/restore.sh` writes only
+   the mounts the backup's checksummed `MANIFEST` lists and the service still has, never the downloads directory
+   or any other path a service excludes with its `org.honeybeartech.hyperion.backup.skip` label.
 
 ## Policy
 
@@ -60,6 +60,10 @@ a non-empty reason:
   internet are the operator's settings.
 - **The host.** Anyone with root, `docker` group membership or write access to `.env` or the services' data
   controls the stack; those are trusted.
+- **Backups off the host from the host itself.** The scheduled backup can delete old backups on the backup
+  server, so whoever controls this host can delete or overwrite them too. Snapshots or a versioned copy on the
+  backup server, outside this host's reach, are what protect them; a recycle bin may not see deletions made over
+  rsync (Synology's doesn't).
 - **Upstream images' internals.** Some images run as root inside the container; that is the image's design and
   is accepted where the image offers nothing else.
 
@@ -70,4 +74,6 @@ a non-empty reason:
 | Logins of the services that have them (Prowlarr, qBittorrent, optionally Heimdall and Dozzle) | each service's data | the repository, `.env`, issues, logs you paste |
 | Indexer credentials and API keys; the media apps' API keys | Prowlarr's data | same |
 | autoheal's notification webhook URL (optional) | the gitignored `autoheal.env`, mode `600` | same |
+| The backup push monitor's URL | `backup.env` (mode `600`, gitignored) | the repository, issues, logs you paste |
+| The key for the backup server | the stack user's `~/.ssh` on the host, restricted on the server to this host | same |
 | Backups of the data | off the host, mode `600` | anywhere public |

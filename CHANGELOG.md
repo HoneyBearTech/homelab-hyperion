@@ -8,6 +8,14 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Added
 
+- Scheduled backups copied off the host: `scripts/scheduled-backup.sh` takes a backup, copies it to
+  `BACKUP_REMOTE` with rsync (`SHA256SUMS` last, so a cut-off copy is refused on restore), keeps the newest
+  `BACKUP_KEEP` (3) here and `BACKUP_REMOTE_KEEP` (30) there, and reports to an Uptime Kuma push monitor. Settings
+  in the optional, gitignored `backup.env` (template `backup.env.example`); systemd user units in `deploy/systemd/`
+  run it nightly at 04:30 ([docs/installing.md](docs/installing.md#scheduled-backups)). `scripts/backup.sh` stops
+  one service at a time, only while it copies that service's data, and compresses the copy after starting the
+  service again (with pigz when it's installed); the smoke test runs the scheduled backup against a stand-in
+  backup server.
 - `compose.yaml`: Prowlarr, qBittorrent, Heimdall, Dozzle (with optional remote agents), a Minecraft Bedrock
   server, and autoheal behind a filtering socket proxy. Every image is pinned as `name:tag@sha256:<digest>` for
   `linux/amd64`, the Minecraft server's version is pinned too, every service has a health check, and every

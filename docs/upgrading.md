@@ -21,8 +21,8 @@ anything you depend on.
 
 The state worth keeping is each service's data: Prowlarr's database (with the indexers and their credentials),
 qBittorrent's settings and torrent list, Heimdall's database, and the Minecraft server's worlds and settings.
-`scripts/backup.sh` stops the stack so the databases and worlds are consistent, archives each of those mounts,
-copies `.env` and any `<service>.env`, and starts again whatever was running:
+`scripts/backup.sh` stops each service in turn while it copies that service's mounts, so its database or world is
+consistent, starts it again, then compresses the copy; it also copies `.env` and any `<service>.env`:
 
 ```sh
 scripts/backup.sh                       # into backups/<date>-<time>/ in the checkout (gitignored)
@@ -35,7 +35,8 @@ copies.
 The directory holds one `<service>--<path>.tar.gz` per mount, the settings under `env/`, a `MANIFEST` naming
 each archive's service, container path, host path and image, and `SHA256SUMS`. Everything in it is readable
 only by the user who ran the backup, and it holds secrets (Prowlarr's indexer credentials among them). **Copy it
-off the host.**
+off the host**: the nightly scheduled backup does that for you ([installing.md](installing.md#scheduled-backups)),
+but take a fresh one before an upgrade all the same.
 
 ## Upgrading
 
