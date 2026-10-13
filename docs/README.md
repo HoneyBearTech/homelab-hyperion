@@ -20,7 +20,5 @@ Project policies live at the top of the repository: [CONTRIBUTING.md](../CONTRIB
 [GOVERNANCE.md](../GOVERNANCE.md), [SECURITY.md](../SECURITY.md), [SUPPORT.md](../SUPPORT.md),
 [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) and [CHANGELOG.md](../CHANGELOG.md).
 
-These documents change in the same pull request as the behaviour they describe. Anything not built yet is
-marked **Planned**; for now that includes the stack itself (`compose.yaml`) and everything that runs it. The
-scripts that check, back up and test it and the release workflow exist and run in CI. If you find a document
-that's wrong, please [open an issue](https://github.com/HoneyBearTech/homelab-hyperion/issues): it's treated as a bug.
+These documents change in the same pull request as the behaviour they describe, and anything not built yet is
+marked **Planned**. If you find a document that's wrong, please [open an issue](https://github.com/HoneyBearTech/homelab-hyperion/issues): it's treated as a bug.

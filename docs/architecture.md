@@ -6,8 +6,8 @@ a start page, a log viewer and a Minecraft Bedrock server, with autoheal keeping
 Ubuntu 24.04 virtual machine on amd64, with no GPU. The repository holds configuration, not application code:
 the services run from their upstream images, pinned by digest.
 
-> **Planned:** `compose.yaml` isn't in the repository yet. This page describes the stack it will define; the
-> services run today from an older, hand-managed setup on the host and move over in one planned cutover.
+> **Planned:** Hyperion still runs these services from an older, hand-managed setup. They move to this stack in
+> one cutover, after the first release, adopting their existing data, ports and download paths.
 
 ## Services
 
@@ -19,7 +19,7 @@ the services run from their upstream images, pinned by digest.
 | Dozzle | the project's own image | Web UI that streams the containers' logs live: this host's from the Docker API, other hosts' from Dozzle agents running there |
 | Minecraft Bedrock server | `itzg/minecraft-bedrock-server`, a community wrapper | Downloads the pinned Bedrock Dedicated Server from Minecraft's site on start and runs it |
 | autoheal | `willfarrell/autoheal` | Restarts any container labelled `autoheal: "true"` that Docker reports unhealthy |
-| socket proxy | linuxserver.io | Gives autoheal a filtered Docker API (list, inspect, restart) instead of the socket |
+| socket proxy | linuxserver.io | Gives autoheal a filtered Docker API (list, inspect, restart, stop) instead of the socket |
 
 Other services on the same host (a media server, a transcoder, monitoring agents, a Docker management agent)
 come from their own projects; this stack doesn't include or manage them.
@@ -76,8 +76,9 @@ Nothing on the host updates itself: a version that runs is always a version that
 
 | Path | What |
 | --- | --- |
-| `compose.yaml` | The stack (**Planned**) |
+| `compose.yaml` | The stack |
 | `.env.example` | Template for the settings |
+| `autoheal.env.example` | Template for autoheal's optional restart webhook (the one secret) |
 | `scripts/check_compose.py` | The policy check and SBOM generator (standard-library Python) |
 | `scripts/backup.sh`, `scripts/restore.sh` | Backup and restore of every service's data, never the downloads |
 | `scripts/smoke-test.sh` | Starts the stack in isolation, waits for health, and round-trips a backup |

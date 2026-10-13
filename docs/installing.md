@@ -2,9 +2,6 @@
 
 The [quick start](quick-start.md) is the short version of this page.
 
-> **Planned:** `compose.yaml` isn't in the repository yet. The requirements and security advice apply now; the
-> install steps apply once the stack is added.
-
 ## Requirements
 
 - Linux with Docker Engine and the Compose v2 plugin (Docker Engine 25 or later and Compose 2.24 or later, for
@@ -28,7 +25,8 @@ The [quick start](quick-start.md) is the short version of this page.
 | Heimdall's database and settings | `HEIMDALL_CONFIG_PATH` | `/config` |
 | The Minecraft server's worlds and settings | `MINECRAFT_DATA_PATH` | `/data` |
 
-These are **Planned** paths ([interfaces.md](interfaces.md#volumes-and-mounts)). Dozzle, autoheal and the socket
+The container paths are fixed in `compose.yaml` ([interfaces.md](interfaces.md#volumes-and-mounts)); the host
+paths are yours to choose. Each data directory must be owned by `PUID`:`PGID`. Dozzle, autoheal and the socket
 proxy keep no data.
 
 ## Installing
@@ -36,7 +34,8 @@ proxy keep no data.
 1. Clone the repository (or download a release's source archive and verify it,
    [verifying-releases.md](verifying-releases.md)).
 2. Create `.env` from `.env.example` (mode `600`) and set every value, including `MINECRAFT_EULA=TRUE`.
-3. Create the data directories, then `docker compose up -d`.
+   Optionally create `autoheal.env` from `autoheal.env.example` (mode `600`) for restart notices.
+3. Create the data directories, then `docker compose up -d --wait`.
 
 **Adopting existing containers.** If the services already run on the host (from Portainer stacks or another
 Compose project), point the stack at their existing data instead of starting empty: stop the old containers,
@@ -44,7 +43,9 @@ set each path in `.env` to where its data already is, and keep the same publishe
 container path for the downloads**: qBittorrent records every torrent's save path, and the media apps map that
 path to their own view of the files, so a different mount point breaks both. Take a backup of the old data
 first. Run the same Minecraft server version as before (or newer): a world opened by a newer server can't go
-back to an older one.
+back to an older one. Set `MINECRAFT_LEVEL_NAME` to the existing world's folder name (otherwise the server
+starts a new, empty world), make the Minecraft data directory owned by `PUID`:`PGID` (the server runs as that
+user, not as root), and check that `allowlist.json` names the players.
 
 Running `main` instead of a release is possible but unsupported for anything you depend on.
 
@@ -58,13 +59,14 @@ Running `main` instead of a release is possible but unsupported for anything you
 - **Treat Dozzle as admin access.** It reads every container's logs through the Docker socket, and every
   connected host's through its Dozzle agent; keep those agents' ports on the LAN too. The socket is
   mounted read-only, which protects the socket file, not the API behind it.
-- **autoheal only through the socket proxy**, which allows listing, inspecting and restarting containers and
-  nothing else, on a network with no published ports.
+- **autoheal only through the socket proxy**, which allows listing, inspecting, restarting and stopping
+  containers and nothing else, on a network with no published ports.
 - **qBittorrent is on the public internet** by design: peers see your public IP address. Forward only its
   listening port, never its web UI. Whether to route it through a VPN is your decision; this stack has none.
-- **Minecraft from outside the LAN** means forwarding UDP 19132. Do it only if you mean to, and keep the server's
-  allowlist on so only the players you name can join.
-- Keep `.env` at mode `600`; it holds no secrets by design, but it describes your host.
+- **Minecraft from outside the LAN** means forwarding UDP 19132. Do it only if you mean to; the server's
+  allowlist is on, so only the players you name can join.
+- Keep `.env` at mode `600`; it holds no secrets by design, but it describes your host. `autoheal.env` holds a
+  secret (anyone with the webhook URL can post to the channel): mode `600`, never committed.
 - Back up the services' data directories ([upgrading.md](upgrading.md#backing-up)).
 - Don't add services that mount the Docker socket, run privileged or use the host network without a documented
   reason; the policy check refuses them ([security.md](security.md)).

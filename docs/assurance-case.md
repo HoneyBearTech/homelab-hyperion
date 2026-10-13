@@ -1,24 +1,23 @@
 # Assurance case
 
 Why homelab-hyperion meets its [security requirements](security.md): the threat model, the trust boundaries,
-the secure design principles it follows, and how common weaknesses are countered. Parts that depend on
-`compose.yaml`, which isn't in the repository yet, are marked **Planned**.
+the secure design principles it follows, and how common weaknesses are countered.
 
 ## Threat model
 
 | Asset | Threat | Countered by |
 | --- | --- | --- |
-| The host | A compromised or malicious image | Digest pins; versions change only by reviewed pull request; no privileged, capability, host-namespace or socket access without a reasoned label (**Planned** for the stack; the checker exists) |
-| The host | A flaw in Dozzle or autoheal turned against the Docker API | Dozzle on the LAN only, behind access lists and its own login; autoheal never gets the socket, only the socket proxy's filtered API (list, inspect, restart) on an internal network with no published port |
+| The host | A compromised or malicious image | Digest pins; versions change only by reviewed pull request; no privileged, capability, host-namespace or socket access without a reasoned label, enforced by `scripts/check_compose.py` in CI and before every release |
+| The host | A flaw in Dozzle or autoheal turned against the Docker API | Dozzle on the LAN only, behind access lists and its own login; autoheal never gets the socket, only the socket proxy's filtered API (list, inspect, restart, stop) on an internal network with no published port |
 | The host | The Minecraft server, exposed to players, is exploited | Runs unprivileged with only its data mounted; pinned server version; allowlist on; reachable from the internet only if the operator forwards its UDP port |
 | The host's network identity | qBittorrent reveals the public IP address to peers | Documented; forwarding only the listening port, never the web UI; a VPN is the operator's choice |
 | The downloads | A backup or restore script touching them | Paths in a service's `org.honeybeartech.hyperion.backup.skip` label are never archived by `backup.sh`, and `restore.sh` refuses to write them even if a backup lists them; the smoke test checks both |
 | The web UIs | Someone on the LAN uses a service | LAN only, behind a reverse proxy's access lists; every login the service offers turned on ([installing.md](installing.md#running-it-securely)) |
 | Indexer credentials, logins | Committed to the public repository | Kept in the services' data, never in the repo; `.gitignore`; GitHub push protection; gitleaks over the history in CI |
 | Indexer credentials, logins | Leaked through a backup or Dozzle's log view | `scripts/backup.sh` writes backups readable only by the user who ran it, documented as secret, to be kept off the host; Dozzle treated as admin access |
-| The services' data | An upgrade that migrates and breaks it (including a Minecraft world opened by a newer server) | Backup before every upgrade; rollback = old tag + `scripts/restore.sh`, exercised by the CI smoke test (**Planned** against the real stack; tested against a stand-in); the Minecraft server version changes only by hand |
+| The services' data | An upgrade that migrates and breaks it (including a Minecraft world opened by a newer server) | Backup before every upgrade; rollback = old tag + `scripts/restore.sh`, exercised by the CI smoke test against the real stack; the Minecraft server version changes only by hand |
 | The services' data | A crafted backup writing outside the services' data | `restore.sh` verifies `SHA256SUMS` (which covers the `MANIFEST`), accepts only plain archive names and absolute container paths without `..`, and writes only a mount the service has read-write and doesn't exclude from backups |
-| Availability | A service hangs without exiting | A health check on every service and autoheal restarting unhealthy containers (**Planned**) |
+| Availability | A service hangs without exiting | A health check on every service and autoheal restarting unhealthy containers, checked by the smoke test |
 | The release | Tampered release files | Keyless-signed `SHA256SUMS`, SLSA provenance, signed tags |
 | The CI pipeline | Untrusted pull request input running with credentials | `pull_request` only, read-only token by default, untrusted values only via `env:`, actions pinned by SHA |
 | Operator privacy | Hostnames, addresses, share names, paths or player names in the public repo | Placeholders only; reviewed in every pull request |
@@ -72,11 +71,10 @@ on the host, or write access to `.env` or the services' data.
 ## Evidence
 
 - CI on every change: ruff (with the bandit rules), yamllint, actionlint, gitleaks over the history,
-  shellcheck, pytest with a 90 % branch-coverage floor; once `compose.yaml` exists, `docker compose config`, the
-  policy check, and a smoke test on amd64 that starts every pinned image, waits for its health check,
-  round-trips a backup and restore, checks that excluded mounts are left alone and that autoheal restarts an
-  unhealthy container (a dynamic test of the stack and the scripts). Until then the stack steps pass with a
-  notice.
-- A weekly Trivy scan of every pinned image, and on every change to `compose.yaml`, into code scanning.
+  shellcheck, pytest with a 90 % branch-coverage floor, `docker compose config`, the policy check, and a smoke
+  test on amd64 that starts every pinned image, waits for its health check, round-trips a backup and restore,
+  checks that excluded mounts are left alone and that autoheal restarts an unhealthy container (a dynamic test
+  of the stack and the scripts).
+- A weekly Trivy scan of every pinned image, and on every change to `compose.yaml` on `main`, into code scanning.
 - CodeQL (Python and Actions) on every pull request and weekly; OpenSSF Scorecard weekly; dependency
   review on every pull request.

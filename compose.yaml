@@ -1,0 +1,210 @@
+# The Hyperion stack. Every setting comes from .env (template: .env.example; reference: docs/interfaces.md); the
+# one secret, autoheal's optional webhook, from autoheal.env (template: autoheal.env.example).
+# Every image is pinned as name:tag@sha256:<digest>; Dependabot proposes updates (patch and minor ones merge
+# automatically once CI passes). scripts/check_compose.py enforces the policy (docs/security.md#policy).
+
+name: homelab-hyperion
+
+x-linuxserver-env: &linuxserver-env
+  PUID: ${PUID:?set PUID in .env}
+  PGID: ${PGID:?set PGID in .env}
+  TZ: ${TZ:?set TZ in .env}
+
+# Health check timing shared by every service; each service adds its own test. During start_period a failing
+# check doesn't count, and Docker checks every start_interval so a healthy service shows up within seconds. The
+# long start_period keeps autoheal from restarting a service in the middle of a slow database migration after an
+# upgrade (or, for Minecraft, while it downloads the server).
+x-healthcheck: &healthcheck
+  interval: 1m
+  timeout: 10s
+  retries: 3
+  start_period: 10m
+  start_interval: 5s
+
+services:
+  # --- Downloads ------------------------------------------------------------------------------------------------
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls163@sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902
+    container_name: prowlarr
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:9696/ping"]
+    environment: *linuxserver-env
+    ports:
+      - "9696:9696"
+    volumes:
+      - ${PROWLARR_CONFIG_PATH:?set PROWLARR_CONFIG_PATH in .env}:/config
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:4.5.5-r0-ls292@sha256:6ce86cd2924985385641d5bcac0234e82df2da8baa6e1e02b4c0a95635445410
+    container_name: qbittorrent
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+      # The downloads are transient and large; the apps that import them keep their own copies.
+      org.honeybeartech.hyperion.backup.skip: "/downloads"
+    healthcheck:
+      <<: *healthcheck
+      # The web UI's login page answers without a login.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/"]
+    environment:
+      <<: *linuxserver-env
+      WEBUI_PORT: 8080
+      TORRENTING_PORT: 6881
+    ports:
+      - "8090:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - ${QBITTORRENT_CONFIG_PATH:?set QBITTORRENT_CONFIG_PATH in .env}:/config
+      - ${DOWNLOADS_PATH:?set DOWNLOADS_PATH in .env}:/downloads
+
+  # --- Start page and logs --------------------------------------------------------------------------------------
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:v2.8.3-ls365@sha256:4c2b77d7e391ac794ee7504839ed699a7f98309f853670ee45a7712a14c41001
+    container_name: heimdall
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/"]
+    environment:
+      <<: *linuxserver-env
+      # Heimdall's live stats may not query addresses on the LAN (the default).
+      ALLOW_INTERNAL_REQUESTS: "false"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${HEIMDALL_CONFIG_PATH:?set HEIMDALL_CONFIG_PATH in .env}:/config
+
+  dozzle:
+    image: amir20/dozzle:v11.3.0@sha256:a7d69d20891d3dcc82636e24afa4c1c162b41d0673ef798b14f09e6b69accc5a
+    container_name: dozzle
+    restart: unless-stopped
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "/dozzle", "healthcheck"]
+    labels:
+      autoheal: "true"
+      org.honeybeartech.hyperion.allow.docker-socket: >-
+        Dozzle shows container logs by reading them through the Docker API. The socket is mounted read-only, which
+        protects the socket file but not the API, so the web UI must stay on the LAN.
+    environment:
+      # Dozzle agents on other hosts whose containers Dozzle also shows; empty for this host only.
+      DOZZLE_REMOTE_AGENT: ${DOZZLE_REMOTE_AGENT:-}
+    ports:
+      - "4040:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # --- Games ----------------------------------------------------------------------------------------------------
+  # The image downloads the Bedrock Dedicated Server named by VERSION from Minecraft's site on start and runs it
+  # as UID:GID. VERSION is pinned here, never LATEST: a newer server upgrades the world for good, so a new version
+  # is a reviewed change (Dependabot doesn't see it). Other game settings live in server.properties in the data
+  # directory; the image rewrites only the ones set below.
+  minecraft:
+    image: itzg/minecraft-bedrock-server:2026.9.2@sha256:244e72a36a3e3d69c588cbeefe6d8f6f97c48869b801718a4023570654e3b3d9
+    container_name: minecraft
+    restart: unless-stopped
+    # On stop the image tells the server to save and shut down; give it time to write the world.
+    stop_grace_period: 1m
+    labels:
+      autoheal: "true"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "mc-monitor", "status-bedrock", "--host", "127.0.0.1", "--port", "19132"]
+    environment:
+      EULA: ${MINECRAFT_EULA:?set MINECRAFT_EULA=TRUE in .env to accept the Minecraft EULA}
+      VERSION: "1.26.52.3"
+      UID: ${PUID:?set PUID in .env}
+      GID: ${PGID:?set PGID in .env}
+      TZ: ${TZ:?set TZ in .env}
+      # The world to open (its folder under worlds/). The image would otherwise reset it to "Bedrock level".
+      LEVEL_NAME: ${MINECRAFT_LEVEL_NAME:?set MINECRAFT_LEVEL_NAME in .env}
+      # Only the players in allowlist.json (in the data directory) can join.
+      ALLOW_LIST: "true"
+    ports:
+      - "19132:19132/udp"
+    volumes:
+      - ${MINECRAFT_DATA_PATH:?set MINECRAFT_DATA_PATH in .env}:/data
+
+  # --- Operations -----------------------------------------------------------------------------------------------
+  # Restarts any container labelled autoheal: "true" that Docker reports unhealthy (Docker itself only restarts a
+  # container whose process exits). It reaches Docker only through socket-proxy, which lets it list, inspect,
+  # restart and stop containers and nothing else. Optional restart notices go to a webhook from autoheal.env.
+  autoheal:
+    image: willfarrell/autoheal:latest@sha256:e7f42d5365c7c4490dd0cafc2858bb9fd2d64a274448d2de2bb5c386f1af7a0f
+    container_name: autoheal
+    restart: unless-stopped
+    # autoheal exits if it can't reach the proxy, so it starts only once the proxy answers. (After a host reboot
+    # Docker starts both at once; autoheal then restarts until the proxy is up, a few seconds.)
+    depends_on:
+      socket-proxy:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      start_period: 1m
+      test: ["CMD", "pgrep", "-f", "autoheal"]
+    labels:
+      org.honeybeartech.hyperion.allow.latest: >-
+        The image publishes "latest" (rebuilt regularly) and versioned tags only up to 1.2.0 from 2021, so the
+        maintained image is "latest", pinned by digest.
+    environment:
+      DOCKER_SOCK: tcp://socket-proxy:2375
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 10
+      # Give a service time to shut down cleanly (and finish database or world writes) before it's restarted.
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 30
+      # Discord's webhook API reads the message from "content".
+      WEBHOOK_JSON_KEY: content
+    env_file:
+      - path: autoheal.env
+        required: false
+    networks:
+      - default
+      - docker-proxy
+
+  # The only service with the Docker socket besides Dozzle. It answers on an internal network with no published
+  # port, and passes on only what autoheal needs: listing and inspecting containers, and restarting or stopping
+  # them (CONTAINERS, ALLOW_RESTARTS). Creating, starting or deleting containers, exec, images, volumes and every
+  # other POST are refused.
+  socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.6@sha256:362cadf55b3c7920189347d0f4d60b389e2f80e929581bf10793f2371aab41e5
+    container_name: socket-proxy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    healthcheck:
+      <<: *healthcheck
+      start_period: 1m
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:2375/_ping"]
+    labels:
+      autoheal: "true"
+      org.honeybeartech.hyperion.allow.docker-socket: >-
+        A filtering proxy so that autoheal never gets the socket itself: it allows only listing, inspecting,
+        restarting and stopping containers, on an internal network with no published port. The socket mount is
+        read-only, which protects the socket file but not the API; the proxy's filter is what limits it.
+    environment:
+      CONTAINERS: 1
+      ALLOW_RESTARTS: 1
+      POST: 0
+      EVENTS: 0
+      PING: 1
+      VERSION: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-proxy
+
+# socket-proxy's network: internal, so nothing on it can reach the outside world and nothing outside can reach the
+# proxy; only autoheal joins it.
+networks:
+  docker-proxy:
+    internal: true

@@ -32,6 +32,10 @@ jobs:
       # scanning category stable across version bumps.
       - name: List the images in compose.yaml
         id: list
+        # Resolving the file needs the Minecraft EULA accepted (compose.yaml refuses an empty MINECRAFT_EULA); this
+        # only reads the file, nothing runs. The variable overrides the empty value in .env.example.
+        env:
+          MINECRAFT_EULA: "TRUE"
         run: |
           if [ ! -f compose.yaml ]; then
             echo "::notice::No compose.yaml yet; nothing to scan"

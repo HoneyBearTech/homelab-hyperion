@@ -65,8 +65,12 @@ jobs:
           coverage report
 
       # The stack itself: the Compose file resolves with the example settings, and every service meets the
-      # policy (pinned by digest, nothing privileged; scripts/check_compose.py). Skipped until compose.yaml exists.
+      # policy (pinned by digest, nothing privileged; scripts/check_compose.py).
       - name: Compose file and policy
+        # Resolving the file needs the Minecraft EULA accepted (compose.yaml refuses an empty MINECRAFT_EULA); this
+        # only reads the file, nothing runs. The variable overrides the empty value in .env.example.
+        env:
+          MINECRAFT_EULA: "TRUE"
         run: |
           if [ ! -f compose.yaml ]; then
             echo "::notice::No compose.yaml yet; skipping the stack checks"

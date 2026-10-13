@@ -2,9 +2,9 @@
 
 The Docker Compose stack for Hyperion, the owner's homelab Ubuntu server (24.04, amd64, a VM, no GPU):
 Prowlarr, qBittorrent, Heimdall, Dozzle, a Minecraft Bedrock server, and autoheal behind a socket proxy, every
-image pinned by tag and digest so the server can be upgraded and rebuilt from this repository. The tooling
-(checker, backup scripts, smoke test, CI, release workflow) is in place; `compose.yaml` isn't yet, and the
-services still run from their old setup on the host until the cutover (plan in Chronos).
+image pinned by tag and digest so the server can be upgraded and rebuilt from this repository. `compose.yaml`
+and the tooling (checker, backup scripts, smoke test, CI, release workflow) are in place; the services still
+run from their old setup on the host until the cutover (plan in Chronos).
 
 ## Before Making Structural Changes
 Read the project's notes first. They live outside this repo, in the owner's Obsidian vault **Chronos** at
@@ -60,7 +60,9 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
   service carries `org.honeybeartech.hyperion.allow.<rule>: "<reason>"` and the owner agreed. Only Dozzle
   (read-only) and the socket proxy may have the socket; autoheal reaches Docker only through the proxy.
   `scripts/check_compose.py` enforces it in CI and in the release workflow.
-- **Every service has a health check** and the `autoheal: "true"` label.
+- **Every service has a health check** and the `autoheal: "true"` label (autoheal itself excepted, as on atlas).
+- **qBittorrent stays on 4.5.5** until after the cutover (Dependabot ignores it); the 5.x upgrade is its own PR,
+  backup first, and removes the ignore entry.
 - **Never change the live server** (Hyperion) without the owner asking: no `docker compose up`, no edits to
   service data, qBittorrent torrents, Prowlarr indexers, Minecraft worlds, or Portainer stacks. Read-only
   inspection (`docker ps`, `docker inspect`) only when asked.
@@ -72,7 +74,7 @@ same pattern; this repo's tooling was copied from homelab-deimos (itself from ho
   cutover plan in Chronos.
 
 ## Stack
-- Docker Compose v2 (`compose.yaml`, **Planned**), upstream images: Prowlarr, qBittorrent, Heimdall
+- Docker Compose v2 (`compose.yaml`), upstream images: Prowlarr, qBittorrent, Heimdall
   (linuxserver.io), Dozzle, the Minecraft Bedrock server (`itzg/minecraft-bedrock-server`), autoheal, a socket
   proxy. Not in this repo: Plex, Tdarr, the Argus agent, the Portainer agent, the local Portainer server (to be
   retired).

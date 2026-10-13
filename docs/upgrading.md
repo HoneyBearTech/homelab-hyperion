@@ -5,8 +5,8 @@ migrate their database when they start a new version and can't go back afterward
 with a backup**. The same steps apply to updating a checkout of `main`, which is possible but unsupported for
 anything you depend on.
 
-> **Planned:** there are no releases yet and no `compose.yaml`. The backup and restore scripts exist and are
-> tested against a stand-in stack; they run in CI against the real one once it's added.
+> **Planned:** there is no release yet (the first will be 0.1.0); until there is, the same steps apply to a
+> checkout of `main`.
 
 ## Before you upgrade
 
