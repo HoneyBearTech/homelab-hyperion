@@ -47,7 +47,7 @@ Who can change the code, releases and project settings, as of the date of this f
 | Publishing GitHub Releases | the release workflow, on a version tag pushed by the maintainer | GitHub Actions, short-lived `GITHUB_TOKEN` |
 | Signing release files | the release workflow, on a version tag | Sigstore keyless signing with the job's GitHub identity; no stored key |
 | Signing commits and version tags | the maintainer | personal SSH key (public half in [`.github/allowed_signers`](.github/allowed_signers)) |
-| Reading the repository from the maintainer's own server (planned) | that server | a read-only deploy key that only works for this repository |
+| Reading the repository from the maintainer's own server | that server | none: the repository is public and read over HTTPS |
 | The OpenSSF Best Practices badge entry | the maintainer | GitHub sign-in |
 | Security advisories and private vulnerability reports | the maintainer | GitHub |
 | Automated changes | Dependabot (pull requests only); the auto-merge workflow turns on auto-merge for its patch and minor updates, which GitHub merges only after every required check passes | GitHub, short-lived `GITHUB_TOKEN` |
@@ -77,19 +77,18 @@ services' logins, tokens and keys, which stay in that installation's data), and 
 handled:
 
 - **What exists**: the maintainer's GitHub account and its recovery codes; the SSH key that signs commits
-  and tags; and, once it's set up, the read-only deploy key the maintainer's own server uses to pull the
-  repository. Release files are signed keylessly (Sigstore), so there is no long-lived signing key, and the
-  project stores no repository secrets.
+  and tags. The maintainer's own server reads the public repository over HTTPS, without a key. Release files
+  are signed keylessly (Sigstore), so there is no long-lived signing key, and the project stores no
+  repository secrets.
 - **Storage**: in the maintainer's password manager, never in the repository, CI logs, issues or pull
-  requests. The deploy key's private half exists only on that server. GitHub secret scanning with push
-  protection and a gitleaks scan in CI block committed secrets, and `.gitignore` excludes `.env`, keys and
-  certificates.
+  requests. GitHub secret scanning with push protection and a gitleaks scan in CI block committed secrets,
+  and `.gitignore` excludes `.env`, keys and certificates.
 - **Access**: the maintainer only; the successor reaches the GitHub account and the signing key through
   the lockbox described under Continuity.
 - **Rotation**: recovery codes are regenerated after use and at least yearly, and the lockbox updated; the
-  signing key is replaced (and `.github/allowed_signers` updated) and the deploy key revoked and replaced if
-  either may have been exposed. Any secret that might have leaked is revoked and replaced at once, and the
-  incident handled as in [SECURITY.md](SECURITY.md).
+  signing key is replaced (and `.github/allowed_signers` updated) if it may have been exposed. Any secret
+  that might have leaked is revoked and replaced at once, and the incident handled as in
+  [SECURITY.md](SECURITY.md).
 - A new stored secret needs a reason, is scoped to the one workflow job that uses it, and is added to this
   section in the same pull request.
 

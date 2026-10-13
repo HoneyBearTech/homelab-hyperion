@@ -12,17 +12,16 @@ file changes with them, in the same pull request.
   version pinned too, a health check on every service, Dependabot proposing updates; the smoke test (including
   an autoheal restart) and the image scan run against it in CI.
 - Done: the first image scan, triaged ([dependencies.md](dependencies.md#current-findings)).
-- Done: the first release, 0.1.0, before Hyperion switches over, so the server is first deployed from a signed,
+- Done: the first release, 0.1.0, before Hyperion switched over, so the server was first deployed from a signed,
   verified version.
-- Switch Hyperion to run the stack from a checkout of this repository, adopting the existing data, ports and
-  download paths so nothing that reaches the server notices.
-- Then upgrade qBittorrent from 4.5.5 to 5.x, in its own pull request.
+- Done: Hyperion runs the stack from a checkout of this repository, with the existing data, ports and download
+  paths.
+- Next: upgrade qBittorrent from 4.5.5 to 5.x, in its own pull request.
 
 ## Next: safe upgrades and rebuilds
 
-- Rehearse the documented rebuild ([rebuilding.md](rebuilding.md)) on a scratch machine.
 - Done: scheduled backups copied off the host (`scripts/scheduled-backup.sh`, a systemd timer), reported to Uptime
-  Kuma, so the Minecraft worlds and Prowlarr's indexers are never only on Hyperion. Switched on after the move.
+  Kuma, so the Minecraft worlds and Prowlarr's indexers are never only on Hyperion.
 
 ## Later
 
