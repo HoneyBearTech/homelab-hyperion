@@ -6,6 +6,21 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-13
+
+### Fixed
+
+- The Minecraft server accepts players again. Since Bedrock 1.26.50, clients connect only over NetherNet, and a
+  `server.properties` from an older version still selected the previous transport, so the server logged
+  "Players will not be able to connect". `compose.yaml` now sets `TRANSPORT: nethernet`, publishes TCP 19132 (the
+  handshake) and UDP 19140–19149 (one gameplay port per player), and tells clients the address to use from the new
+  required setting `MINECRAFT_ADDRESS`.
+
+### Upgrading
+
+- Set `MINECRAFT_ADDRESS` in `.env` to the address players reach this host at. UDP 19132 is no longer published;
+  players add the server by address and port 19132, since LAN discovery doesn't cross Docker's network.
+
 ## [0.1.0] - 2026-10-13
 
 The first release: the Hyperion stack as a Compose file, every image pinned by version tag and digest for
@@ -58,5 +73,6 @@ copied off the host, and release signing around it.
 - A release workflow that publishes a source archive, the SBOM, `SHA256SUMS` signed keylessly with cosign,
   and SLSA build provenance ([docs/verifying-releases.md](docs/verifying-releases.md)).
 
-[Unreleased]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/HoneyBearTech/homelab-hyperion/releases/tag/v0.1.0

@@ -90,6 +90,7 @@ autoheal's optional restart webhook, goes in the gitignored `autoheal.env` (temp
 | `DOZZLE_REMOTE_AGENT` | *(empty)* | Dozzle agents on other hosts (`host:port`, comma-separated) whose logs Dozzle also shows |
 | `MINECRAFT_DATA_PATH` | `/srv/appdata/minecraft-bedrock` | The Minecraft server's worlds and settings |
 | `MINECRAFT_LEVEL_NAME` | `Bedrock level` | The world the server opens: its folder under `worlds/` |
+| `MINECRAFT_ADDRESS` | `192.0.2.10` | The address players reach this host at, handed to them with their gameplay port |
 | `MINECRAFT_EULA` | *(empty)* | Set to `TRUE` to accept the [Minecraft EULA](https://www.minecraft.net/eula); the server won't start otherwise |
 
 Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
@@ -106,7 +107,7 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
 - qBittorrent's peers see your public IP address. Whether to route it through a VPN is your call; this stack
   doesn't include one.
 - The Minecraft server's allowlist is on: only the players in its `allowlist.json` can join. Only forward its
-  UDP port to the internet if you mean to host players from outside your LAN.
+  ports (TCP 19132, UDP 19140–19149) to the internet if you mean to host players from outside your LAN.
 - Secrets (logins, indexer API keys, webhook URLs) live only in each service's data or its own gitignored
   `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host.
 - Don't run an auto-updater such as Watchtower on these containers; upgrade by release instead.

@@ -12,7 +12,7 @@ The [quick start](quick-start.md) is the short version of this page.
 - A downloads directory (local disk or a network share) writable by `PUID`/`PGID`. If the media apps that
   import from it run on another machine, it must be storage that machine sees too.
 - Free host ports: 80 and 443 (Heimdall), 4040 (Dozzle), 6881 TCP and UDP (qBittorrent), 8090 (qBittorrent's
-  web UI), 9696 (Prowlarr) and 19132 UDP (Minecraft).
+  web UI), 9696 (Prowlarr), and 19132 TCP and 19140–19149 UDP (Minecraft).
 - Acceptance of the [Minecraft EULA](https://www.minecraft.net/eula), which the Bedrock Dedicated Server requires.
 
 ## Where data lives
@@ -63,8 +63,9 @@ Running `main` instead of a release is possible but unsupported for anything you
   containers and nothing else, on a network with no published ports.
 - **qBittorrent is on the public internet** by design: peers see your public IP address. Forward only its
   listening port, never its web UI. Whether to route it through a VPN is your decision; this stack has none.
-- **Minecraft from outside the LAN** means forwarding UDP 19132. Do it only if you mean to; the server's
-  allowlist is on, so only the players you name can join.
+- **Minecraft from outside the LAN** means forwarding TCP 19132 and UDP 19140–19149, and setting
+  `MINECRAFT_ADDRESS` to an address those players can reach. Do it only if you mean to; the server's allowlist is
+  on, so only the players you name can join.
 - Keep `.env` at mode `600`; it holds no secrets by design, but it describes your host. `autoheal.env` holds a
   secret (anyone with the webhook URL can post to the channel): mode `600`, never committed.
 - Back up the services' data directories ([upgrading.md](upgrading.md#backing-up)), and schedule a nightly copy

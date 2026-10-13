@@ -19,7 +19,8 @@ user in the `docker` group, and the host ports the services use free ([installin
    ```
 
    In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directory), `DOWNLOADS_PATH`, the
-   data paths, `MINECRAFT_LEVEL_NAME` (the world's name), and `MINECRAFT_EULA=TRUE` once you've read and
+   data paths, `MINECRAFT_LEVEL_NAME` (the world's name), `MINECRAFT_ADDRESS` (this host's LAN address, for the
+   players), and `MINECRAFT_EULA=TRUE` once you've read and
    accepted the [Minecraft EULA](https://www.minecraft.net/eula). Every setting is described in
    [interfaces.md](interfaces.md#settings).
 
@@ -44,6 +45,8 @@ user in the `docker` group, and the host ports the services use free ([installin
 5. **Finish each service's setup in its web UI** (ports in [interfaces.md](interfaces.md#services-and-ports)).
    qBittorrent prints a temporary web UI password in its log (`docker compose logs qbittorrent`): sign in and
    change it. In Prowlarr, set a login, add your indexers and connect the media apps. The Minecraft server's
-   allowlist is on: until you name the players in `allowlist.json` (in `MINECRAFT_DATA_PATH`), nobody can join.
+   allowlist is on: until you name the players, nobody can join. Add each one with
+   `docker compose exec minecraft send-command allowlist add "<gamer tag>"`. Players add the server by this host's
+   address and port 19132; it doesn't appear in their LAN list.
 
 To upgrade later, follow [upgrading.md](upgrading.md); it starts with a backup.
