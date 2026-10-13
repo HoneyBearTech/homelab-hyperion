@@ -3,8 +3,6 @@
 What homelab-hyperion is meant to guarantee, what it leaves to the operator and the services, and where secrets
 live. The reasoning behind these requirements is in the [assurance case](assurance-case.md).
 
-> **Planned:** requirement 5 takes effect with the first release.
-
 ## What homelab-hyperion protects
 
 1. **Only reviewed versions run.** Every image is pinned as `name:tag@sha256:<digest>`, and the Minecraft

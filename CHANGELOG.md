@@ -6,6 +6,12 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-13
+
+The first release: the Hyperion stack as a Compose file, every image pinned by version tag and digest for
+`linux/amd64` and the Minecraft server's version pinned too, with health checks, autoheal, scheduled backups
+copied off the host, and release signing around it.
+
 ### Added
 
 - Scheduled backups copied off the host: `scripts/scheduled-backup.sh` takes a backup, copies it to
@@ -52,4 +58,5 @@ All notable changes to homelab-hyperion are documented here. The format follows
 - A release workflow that publishes a source archive, the SBOM, `SHA256SUMS` signed keylessly with cosign,
   and SLSA build provenance ([docs/verifying-releases.md](docs/verifying-releases.md)).
 
-[Unreleased]: https://github.com/HoneyBearTech/homelab-hyperion/commits/main
+[Unreleased]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/HoneyBearTech/homelab-hyperion/releases/tag/v0.1.0

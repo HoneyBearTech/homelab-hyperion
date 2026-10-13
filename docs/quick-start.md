@@ -9,7 +9,7 @@ user in the `docker` group, and the host ports the services use free ([installin
    git clone https://github.com/HoneyBearTech/homelab-hyperion.git && cd homelab-hyperion
    ```
 
-   Once releases exist, check out the latest one (`git checkout vX.Y.Z`) and verify it first
+   Check out the latest release (`git checkout vX.Y.Z`) and verify it first
    ([verifying-releases.md](verifying-releases.md)).
 
 2. **Configure it.**
