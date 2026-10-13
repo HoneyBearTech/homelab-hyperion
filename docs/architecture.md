@@ -6,8 +6,8 @@ a start page, a log viewer and a Minecraft Bedrock server, with autoheal keeping
 Ubuntu 24.04 virtual machine on amd64, with no GPU. The repository holds configuration, not application code:
 the services run from their upstream images, pinned by digest.
 
-> **Planned:** Hyperion still runs these services from an older, hand-managed setup. They move to this stack in
-> one cutover, after the first release, adopting their existing data, ports and download paths.
+Hyperion runs the stack from a checkout of a release tag. It moved over from an older, hand-managed setup in
+one cutover, adopting the existing data, ports and download paths.
 
 ## Services
 

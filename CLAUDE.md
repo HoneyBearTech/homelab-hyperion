@@ -2,9 +2,9 @@
 
 The Docker Compose stack for Hyperion, the owner's homelab Ubuntu server (24.04, amd64, a VM, no GPU):
 Prowlarr, qBittorrent, Heimdall, Dozzle, a Minecraft Bedrock server, and autoheal behind a socket proxy, every
-image pinned by tag and digest so the server can be upgraded and rebuilt from this repository. `compose.yaml`
-and the tooling (checker, backup scripts, smoke test, CI, release workflow) are in place; the services still
-run from their old setup on the host until the cutover (plan in Chronos).
+image pinned by tag and digest so the server can be upgraded and rebuilt from this repository. Hyperion runs the
+stack from a checkout of a release tag (cut over 2026-10-13); its nightly backups go off the host. Deploying a
+release: `git fetch --tags && git checkout vX.Y.Z && docker compose up -d`, only when the owner asks.
 
 ## Before Making Structural Changes
 Read the project's notes first. They live outside this repo, in the owner's Obsidian vault **Chronos** at
