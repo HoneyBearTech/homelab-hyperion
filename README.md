@@ -18,7 +18,7 @@ Docker Compose stack for Hyperion, a homelab Ubuntu server (24.04, amd64). Versi
 
 - [Quick start](docs/quick-start.md): getting the stack running on a fresh Docker host
 - [Installing](docs/installing.md): host preparation, where data lives, running it securely, uninstalling
-- [Upgrading](docs/upgrading.md): moving to a new release, backup and restore, rolling back
+- [Upgrading](docs/upgrading.md): moving to a new release or following `main`, backup and restore, rolling back
 - [Rebuilding](docs/rebuilding.md): a new or wiped host, from a backup
 - [Architecture](docs/architecture.md): the services, actors, data flow and how updates reach the host
 - [Interfaces](docs/interfaces.md): every setting, port, volume, label and command

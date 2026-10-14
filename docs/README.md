@@ -6,7 +6,7 @@ Start with the [README](../README.md) for what homelab-hyperion is and how to ru
 | --- | --- |
 | [Quick start](quick-start.md) | Getting the stack running on a fresh Docker host |
 | [Installing](installing.md) | Host preparation, directory layout, running it securely, uninstalling |
-| [Upgrading](upgrading.md) | Moving to a new release, backing up the services' data first, and rolling back |
+| [Upgrading](upgrading.md) | Moving to a new release or following `main`, backing up the services' data first, and rolling back |
 | [Rebuilding](rebuilding.md) | Bringing the stack back on a new or wiped host from a backup |
 | [Architecture](architecture.md) | The services, who talks to whom, and how updates flow from Dependabot to the host |
 | [Interfaces](interfaces.md) | Every setting, port, volume, label and command |

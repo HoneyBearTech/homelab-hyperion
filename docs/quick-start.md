@@ -10,7 +10,8 @@ user in the `docker` group, and the host ports the services use free ([installin
    ```
 
    Check out the latest release (`git checkout vX.Y.Z`) and verify it first
-   ([verifying-releases.md](verifying-releases.md)).
+   ([verifying-releases.md](verifying-releases.md)). Staying on `main` instead, as the maintainer's server does,
+   means every merge is an upgrade ([upgrading.md](upgrading.md#following-main)).
 
 2. **Configure it.**
 

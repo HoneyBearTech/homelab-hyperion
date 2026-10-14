@@ -101,6 +101,12 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   `scripts/restore.sh` are the way back, with the owner.
 - **Pinning by hand**: the owner checks out another commit or tag on the host; the agent pauses until the checkout
   is on `main` again. Release tags stay as signed, verified snapshots; they no longer drive deploys.
+- **Backups and restores hold the agent's lock** (`deploy_lock` in `scripts/lib.sh`, 2026-10-14): `flock` on the
+  agent's `<state dir>/hyperion/lock`, waiting up to 30 min for a deploy; a no-op where that state dir doesn't
+  exist (CI, the Mac). The agent skips its runs while it's held. `pull_stack` is the only stack-specific line: keep
+  the function text the same as ares'. Tests: `tests/test_deploy_lock.py` (the flock ones skip on macOS).
+- **The agent never installs systemd units**: a change to `deploy/systemd/` needs a manual copy +
+  `systemctl --user daemon-reload` on the host (say so in the PR).
 
 ## Stack
 - Docker Compose v2 (`compose.yaml`), upstream images: Prowlarr, qBittorrent, Heimdall
@@ -112,9 +118,10 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   `lib.sh` (bash, must run on macOS' bash 3.2; `scheduled-backup.sh` also with macOS' openrsync, so no
   `--chmod`); ruff (`select = ["ALL"]`), yamllint, shellcheck, pytest + coverage (90 % branch floor), pip-tools
   for the hash-pinned `requirements-dev.txt`. CI-only: actionlint, gitleaks, CodeQL, Scorecard, dependency
-  review, DCO, Trivy image scan, Dependabot auto-merge (patch/minor, rebuilds). CI logs in to Docker Hub with the
-  read-only `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets when they exist (owner 2026-10-13; not created yet, so
-  it pulls anonymously) and logs out before the smoke test starts any container.
+  review, DCO, Trivy image scan, Dependabot auto-merge (patch/minor/major, rebuilds). CI logs in to Docker Hub with
+  the read-only `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets when they exist (owner 2026-10-13; Actions and
+  Dependabot secrets in place, anonymous fallback for fork PRs) and logs out before the smoke test starts any
+  container.
 - GitLab copy: the owner's self-hosted GitLab (CE, LAN only; host facts in Chronos) is to hold a mirror. GitHub
   stays the home (OpenSSF badges, Scorecard, Dependabot, releases); every change goes to GitHub as a PR, never to
   GitLab. `.gitlab-ci.yml` mirrors GitHub on a schedule (fast-forward only, `MIRROR_TOKEN` CI/CD variable) and

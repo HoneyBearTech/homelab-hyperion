@@ -16,17 +16,21 @@ file changes with them, in the same pull request.
   verified version.
 - Done: Hyperion runs the stack from a checkout of this repository, with the existing data, ports and download
   paths.
-- Next: upgrade qBittorrent from 4.5.5 to 5.x, in its own pull request.
+- Done: Hyperion follows `main` with a pull agent, so a merge deploys within minutes, Dependabot's automatic merges
+  included ([upgrading.md](upgrading.md#following-main)); releases stay as signed, verified snapshots.
+- Held: upgrading qBittorrent from 4.5.5 to 5.x, in its own pull request, when the maintainer decides to.
 
 ## Next: safe upgrades and rebuilds
 
 - Done: scheduled backups copied off the host (`scripts/scheduled-backup.sh`, a systemd timer), reported to Uptime
   Kuma, so the Minecraft worlds and Prowlarr's indexers are never only on Hyperion.
+- Done: backups and restores take turns with the pull agent, so a deploy never recreates a service they stopped.
+- Done (0.2.0): every service drops all capabilities and adds back only what its image needs, can't gain new
+  privileges, and has a read-only root filesystem where the image allows it ([security.md](security.md)).
 
 ## Later
 
-- Tighter container settings where the images allow it (read-only root filesystems, dropped capabilities,
-  non-root users).
+- Non-root users and read-only root filesystems for the images that don't allow them yet.
 - Optional services as Compose profiles, so a smaller installation can leave them out.
 
 ## Security and project health
@@ -34,9 +38,10 @@ file changes with them, in the same pull request.
 - Keep CI, CodeQL, Scorecard, dependency review and the DCO check green on every change.
 - Branch protection on `main` with required checks; private vulnerability reporting; secret scanning with
   push protection.
-- Reach the OpenSSF Best Practices **Passing** and **Silver** badges, and meet **OSPS Baseline** Levels 1
-  and 2.
-- Signed releases with checksums, SBOM and SLSA provenance from the first release on.
+- Done: **OSPS Baseline** Levels 1 and 2. Next: the OpenSSF Best Practices **Passing** and **Silver** badges,
+  which wait on known vulnerabilities in the images being fixed within 60 days: the qBittorrent upgrade above,
+  and upstream releases for the rest ([dependencies.md](dependencies.md#current-findings)).
+- Done: signed releases with checksums, SBOM and SLSA provenance, from the first release on.
 
 ## What homelab-hyperion will not do
 
