@@ -33,10 +33,28 @@ All notable changes to homelab-hyperion are documented here. The format follows
   before.
 - `scripts/scheduled-backup.sh` retries the Uptime Kuma push for two minutes instead of 25 seconds.
 
+### Security
+
+- Every service drops every Linux capability (`cap_drop: [ALL]`) and runs with `no-new-privileges`, and adds back
+  only the capabilities its image needs, all from Docker's default set: Prowlarr `CHOWN SETUID SETGID KILL`,
+  qBittorrent `CHOWN DAC_OVERRIDE SETUID SETGID KILL`, Heimdall `CHOWN DAC_OVERRIDE FOWNER SETUID SETGID KILL`,
+  the Minecraft server `SETUID SETGID`; Dozzle, autoheal and the socket proxy none. Dozzle, the Minecraft server
+  and autoheal also get a read-only root filesystem, as the socket proxy already had (Prowlarr, qBittorrent and
+  Heimdall keep a writable one: their init doesn't start without it). Settings saved in Dozzle's UI now go to a named
+  volume, `dozzle-data`, so they last when it's recreated and are in the backup. The table is in docs/security.md#hardening.
+- The policy check enforces it: new rules `no-new-privileges` and `cap-drop`, and `cap-add` now fails only on a
+  capability outside Docker's default set. New rule `devices` (from homelab-deimos): no host device mapped into a
+  container (a GPU reservation under `deploy.resources` is allowed). No service maps one.
+
 ### Upgrading
 
-- Nothing to do on the host. The systemd units in `deploy/systemd/` haven't changed (they already run the backup
-  in the best-effort I/O class at the lowest priority), so they needn't be re-installed.
+- **Back up before deploying this release**, and watch each service's first start. The services were tested
+  with fresh data only, so this is the first run on real data. A service without capabilities can't change or
+  write files it doesn't own: data adopted from another installation must be owned by `PUID`:`PGID` (the
+  linuxserver.io services and the Minecraft server). A service that fails with "permission denied" (`EACCES`) on
+  its first start usually has data with an unexpected owner: fix the owner, or go back to the previous release.
+- The systemd units in `deploy/systemd/` haven't changed (they already run the backup in the best-effort I/O
+  class at the lowest priority), so they needn't be re-installed.
 
 ## [0.1.1] - 2026-10-13
 

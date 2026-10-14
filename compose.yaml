@@ -5,6 +5,14 @@
 
 name: homelab-hyperion
 
+# Every service starts with no Linux capabilities and can't gain privileges (setuid binaries, file capabilities);
+# a service that needs a capability adds back only that one, from Docker's default set (docs/security.md#hardening).
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 x-linuxserver-env: &linuxserver-env
   PUID: ${PUID:?set PUID in .env}
   PGID: ${PGID:?set PGID in .env}
@@ -24,8 +32,18 @@ x-healthcheck: &healthcheck
 services:
   # --- Downloads ------------------------------------------------------------------------------------------------
   prowlarr:
+    <<: *hardened
     image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls163@sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902
     container_name: prowlarr
+    # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
+    # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
+    # Its root filesystem stays writable: the init runs from /run (a tmpfs there is mounted noexec, so it can't
+    # start) and writes to the image's own directories.
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - KILL
     restart: unless-stopped
     labels:
       autoheal: "true"
@@ -39,8 +57,20 @@ services:
       - ${PROWLARR_CONFIG_PATH:?set PROWLARR_CONFIG_PATH in .env}:/config
 
   qbittorrent:
+    <<: *hardened
     image: lscr.io/linuxserver/qbittorrent:4.5.5-r0-ls292@sha256:6ce86cd2924985385641d5bcac0234e82df2da8baa6e1e02b4c0a95635445410
     container_name: qbittorrent
+    # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
+    # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
+    # Its root filesystem stays writable: the init runs from /run (a tmpfs there is mounted noexec, so it can't
+    # start) and writes to the image's own directories.
+    # DAC_OVERRIDE: the init, as root, writes the default settings into a data directory that belongs to PUID.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+      - KILL
     restart: unless-stopped
     labels:
       autoheal: "true"
@@ -64,8 +94,23 @@ services:
 
   # --- Start page and logs --------------------------------------------------------------------------------------
   heimdall:
+    <<: *hardened
     image: lscr.io/linuxserver/heimdall:v2.8.3-ls366@sha256:3c9e97c416c7f6d72a3fc12af01a37bd0e71d9e6588d25c40b47e391f39ff7fd
     container_name: heimdall
+    # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
+    # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
+    # Its root filesystem stays writable: the init runs from /run (a tmpfs there is mounted noexec, so it can't
+    # start) and writes to the image's own directories.
+    # DAC_OVERRIDE: the init, as root, sets up nginx, PHP and the app in directories that belong to PUID; FOWNER:
+    # it sets the mode of the app's settings file (which holds its key). Ports 80 and 443 need no capability: Docker
+    # lets any process in the container bind low ports.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+      - KILL
     restart: unless-stopped
     labels:
       autoheal: "true"
@@ -83,9 +128,15 @@ services:
       - ${HEIMDALL_CONFIG_PATH:?set HEIMDALL_CONFIG_PATH in .env}:/config
 
   dozzle:
+    <<: *hardened
     image: amir20/dozzle:v11.3.2@sha256:0d8cf9702f422d65a7e8ad238785dc6b05b2b9c43c945f6bbdf3358ad5da5f6c
     container_name: dozzle
     restart: unless-stopped
+    # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, a named
+    # volume: Docker creates it owned by root, the user Dozzle runs as, so it writes there with no capabilities.
+    read_only: true
+    tmpfs:
+      - /tmp
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "/dozzle", "healthcheck"]
@@ -100,6 +151,7 @@ services:
     ports:
       - "4040:8080"
     volumes:
+      - dozzle-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # --- Games ----------------------------------------------------------------------------------------------------
@@ -108,8 +160,18 @@ services:
   # is a reviewed change (Dependabot doesn't see it). Other game settings live in server.properties in the data
   # directory; the image rewrites only the ones set below.
   minecraft:
+    <<: *hardened
     image: itzg/minecraft-bedrock-server:2026.10.0@sha256:0e0eaf6cabd90f6aff4c31a97f7f01aef780ced92de7a1304acdcd519e99b4f0
     container_name: minecraft
+    # Its entrypoint starts as root and switches to UID:GID before it downloads or runs the server, which needs
+    # these two of Docker's default capabilities; everything after runs as UID:GID.
+    cap_add:
+      - SETUID
+      - SETGID
+    # The server and the world live in /data (its mount); the entrypoint writes nothing else but temporary files.
+    read_only: true
+    tmpfs:
+      - /tmp
     restart: unless-stopped
     # On stop the image tells the server to save and shut down; give it time to write the world.
     stop_grace_period: 1m
@@ -146,9 +208,11 @@ services:
   # container whose process exits). It reaches Docker only through socket-proxy, which lets it list, inspect,
   # restart and stop containers and nothing else. Optional restart notices go to a webhook from autoheal.env.
   autoheal:
+    <<: *hardened
     image: willfarrell/autoheal:latest@sha256:e7f42d5365c7c4490dd0cafc2858bb9fd2d64a274448d2de2bb5c386f1af7a0f
     container_name: autoheal
     restart: unless-stopped
+    read_only: true
     # autoheal exits if it can't reach the proxy, so it starts only once the proxy answers. (After a host reboot
     # Docker starts both at once; autoheal then restarts until the proxy is up, a few seconds.)
     depends_on:
@@ -182,6 +246,7 @@ services:
   # them (CONTAINERS, ALLOW_RESTARTS). Creating, starting or deleting containers, exec, images, volumes and every
   # other POST are refused.
   socket-proxy:
+    <<: *hardened
     image: lscr.io/linuxserver/socket-proxy:3.4.6@sha256:8c059dcb7f496212967dcf1d4136f727f2a23eea4da881945c12b1414aafdf4c
     container_name: socket-proxy
     restart: unless-stopped
@@ -216,3 +281,7 @@ services:
 networks:
   docker-proxy:
     internal: true
+
+# Dozzle's settings. Compose names it <project>_dozzle-data; the backup archives it like the data directories.
+volumes:
+  dozzle-data:

@@ -62,10 +62,16 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   Paths inside a mount that a service's `org.honeybeartech.hyperion.backup.exclude` label lists are left out of
   its archive and left in place by a restore (no service uses it yet); a mount inside another mount is archived
   on its own. Each backup also writes `NETWORKS` and `VERSION`. Keep it that way when adding a service.
-- **No privileged containers, added capabilities, host network/PID or Docker socket mounts** unless the
-  service carries `org.honeybeartech.hyperion.allow.<rule>: "<reason>"` and the owner agreed. Only Dozzle
-  (read-only) and the socket proxy may have the socket; autoheal reaches Docker only through the proxy.
-  `scripts/check_compose.py` enforces it in CI and in the release workflow.
+- **No privileged containers, added capabilities, host network/PID, Docker socket mounts or device mappings**
+  unless the service carries `org.honeybeartech.hyperion.allow.<rule>: "<reason>"` and the owner agreed. Only
+  Dozzle (read-only) and the socket proxy may have the socket; autoheal reaches Docker only through the proxy.
+- **Every service is hardened** (`x-hardened`: `security_opt: [no-new-privileges:true]`, `cap_drop: [ALL]`) and
+  adds back only the capabilities its image needs, all from Docker's default set, each with a comment saying why
+  and proven by the smoke test (docs/security.md#hardening). A capability outside the default set needs
+  `allow.cap-add` and the owner's agreement. `scripts/check_compose.py` enforces all of this in CI and in the
+  release workflow. Read-only root filesystems (`read_only: true` + `tmpfs` only, no image-specific env flags) for
+  Dozzle, Minecraft, autoheal and the socket proxy; the linuxserver.io (s6) images stay writable (their init runs
+  from `/run`, and a tmpfs there is noexec). Keep it that way when adding a service.
 - **Nightly backups as on ares and helios** (owner 2026-10-13): `scripts/scheduled-backup.sh` from a systemd user
   timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
   service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.

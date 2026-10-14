@@ -88,6 +88,7 @@ in the middle of a database migration or while the Minecraft image downloads its
 | `/downloads` | `DOWNLOADS_PATH` | qBittorrent: downloads (read-write; never backed up) |
 | `/config` | `HEIMDALL_CONFIG_PATH` | Heimdall: database and settings |
 | `/data` | `MINECRAFT_DATA_PATH` | Minecraft server: worlds, `server.properties`, allowlist and permissions |
+| `/data` | named volume `dozzle-data` | Dozzle: settings saved in its UI |
 | `/var/run/docker.sock` | the Docker socket, read-only | Dozzle (allowed by label) and the socket proxy (allowed by label) |
 
 The socket proxy and autoheal share the internal network `docker-proxy`, which has no route out and nothing
@@ -98,7 +99,7 @@ published; autoheal also joins the default network, to reach its webhook.
 | Label | Meaning |
 | --- | --- |
 | `autoheal` | `"true"` on every service autoheal may restart when its health check fails (every service but autoheal). |
-| `org.honeybeartech.hyperion.allow.<rule>` | Lets one service break one policy rule; the value is the reason, and must not be empty. Rules: `image`, `digest`, `latest`, `build`, `privileged`, `cap-add`, `host-network`, `host-pid`, `docker-socket`, `healthcheck` ([security.md](security.md#policy)). In use: `docker-socket` for Dozzle and the socket proxy, `latest` for autoheal (its maintained image is only published as `latest`, pinned by digest). |
+| `org.honeybeartech.hyperion.allow.<rule>` | Lets one service break one policy rule; the value is the reason, and must not be empty. Rules: `image`, `digest`, `latest`, `build`, `privileged`, `no-new-privileges`, `cap-drop`, `cap-add`, `host-network`, `host-pid`, `docker-socket`, `devices`, `healthcheck` ([security.md](security.md#policy)). In use: `docker-socket` for Dozzle and the socket proxy, `latest` for autoheal (its maintained image is only published as `latest`, pinned by digest). |
 | `org.honeybeartech.hyperion.backup.skip` | Container paths (comma-separated, exact) that `scripts/backup.sh` never archives and `scripts/restore.sh` refuses to write, even if a backup lists them. In use: qBittorrent's `/downloads`. |
 | `org.honeybeartech.hyperion.backup.exclude` | Paths inside a service's data mounts (comma-separated, exact container paths, at any depth) that `scripts/backup.sh` leaves out of the mount's archive and `scripts/restore.sh` leaves in place. A path that isn't inside one of the service's data mounts, or contains `..` or a pattern character (`*?[\`), makes both fail before anything stops. Not in use. |
 

@@ -8,9 +8,12 @@ live. The reasoning behind these requirements is in the [assurance case](assuran
 1. **Only reviewed versions run.** Every image is pinned as `name:tag@sha256:<digest>`, and the Minecraft
    server's own version is pinned in `compose.yaml`. A registry tag that is moved or hijacked doesn't change
    what `docker compose pull` fetches; a new version arrives only as a pull request that changes the pin.
-2. **No container gets more of the host than it needs.** No service runs privileged, adds Linux
-   capabilities, shares the host's network or PID namespace, or mounts the Docker socket (which is root on
-   the host), unless the exception is written into the service as a reasoned label and reviewed. There are two
+2. **No container gets more of the host than it needs.** Every service drops every Linux capability, adds back
+   only the ones its image needs (never more than Docker's default set) and can't gain privileges from setuid
+   binaries or file capabilities. Where an image allows it, its root filesystem is read-only
+   ([Hardening](#hardening)). No service runs privileged, shares the host's
+   network or PID namespace, maps a host device, or mounts the Docker socket (which is root on the host),
+   unless the exception is written into the service as a reasoned label and reviewed. There are two
    exceptions: Dozzle (read-only mount, to read logs) and the socket proxy (which gives autoheal a filtered API
    instead of the socket).
 3. **No secrets in the repository.** The services keep their logins, indexer credentials and API keys in their
@@ -38,10 +41,37 @@ a non-empty reason:
 | `latest` | uses the `latest` tag |
 | `build` | builds an image instead of pulling a pinned one |
 | `privileged` | sets `privileged: true` |
-| `cap-add` | adds Linux capabilities |
+| `no-new-privileges` | doesn't set `security_opt: [no-new-privileges:true]` |
+| `cap-drop` | doesn't drop every capability (`cap_drop: [ALL]`) |
+| `cap-add` | adds a capability outside Docker's default set (adding back one of those only narrows the default) |
 | `host-network` / `host-pid` | uses the host's network or PID namespace |
 | `docker-socket` | mounts the Docker socket |
+| `devices` | maps a host device into the container (a GPU reservation under `deploy.resources` is allowed) |
 | `healthcheck` | has no health check, or disables it (one defined only in the image isn't visible to the check) |
+
+## Hardening
+
+What each service runs with, beyond the policy. Every service has `cap_drop: [ALL]` and
+`no-new-privileges:true` and adds back only the capabilities in this table, all from Docker's default set. The
+smoke test, with data directories owned by `PUID`:`PGID` as on the host, proves each one still starts healthy and
+survives a backup and restore with these settings, and that autoheal can still restart a container through the
+socket proxy. Each capability was kept only after the service
+failed, logged an error or couldn't stop cleanly without it.
+
+| Service | Capabilities added back | Read-only root filesystem | Why |
+| --- | --- | --- | --- |
+| prowlarr | `CHOWN`, `SETUID`, `SETGID`, `KILL` | no | Its init (s6-overlay) runs as root, takes ownership of the data for `PUID`:`PGID`, runs Prowlarr as that user and signals it on shutdown. The init runs from `/run` and writes to the image's own directories, so the root stays writable (a `/run` tmpfs is mounted noexec, and the init can't start) |
+| qbittorrent | `CHOWN`, `DAC_OVERRIDE`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also writes the default settings into a data directory that belongs to `PUID` |
+| heimdall | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also sets up nginx, PHP and the app in directories that belong to `PUID` and sets the mode of the app's settings file. Ports 80 and 443 need no capability: Docker lets any process in a container bind low ports |
+| dozzle | none | yes (`/tmp` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI go to `/data`, the named volume `dozzle-data`, which Docker creates owned by root |
+| minecraft | `SETUID`, `SETGID` | yes (`/tmp` in memory) | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server; the server and the world are in its data mount |
+| autoheal | none | yes | Only talks to the socket proxy |
+| socket-proxy | none | yes (`/run`, `/tmp` in memory) | Only reads the socket |
+
+The root inside a container without capabilities can only reach what it owns. Data adopted from another
+installation must therefore be owned as each image expects: the linuxserver.io services' and the Minecraft
+server's data by `PUID`:`PGID`; a service that fails with "permission denied" (`EACCES`) on its first start
+usually has data with an unexpected owner.
 
 ## What it doesn't protect
 
