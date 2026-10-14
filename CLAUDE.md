@@ -49,9 +49,11 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - **Every image is pinned as `name:tag@sha256:<digest>`.** Never `latest`, never tag-only (autoheal is the
   documented `allow.latest` exception, as on atlas). Dependabot (`docker-compose` ecosystem) updates tag and digest
   together. linuxserver.io images use their `version-<app version>` tag (socket-proxy its bare version), never the
-  `-lsNNN` build tag: Dependabot can't follow those (qBittorrent, held at 4.5.5, keeps its build tag). Patch and
-  minor updates, and image rebuilds (same tag, new digest; owner 2026-10-14), auto-merge once the required checks
-  pass; major updates wait for the owner. Every merge deploys, the automatic ones included (see Deploys).
+  `-lsNNN` build tag: Dependabot can't follow those (qBittorrent, held at 4.5.5, keeps its build tag). Patch, minor
+  and major updates, and image rebuilds (same tag, new digest), auto-merge once the required checks pass (owner
+  2026-10-14); only an update Dependabot can't classify waits for the owner. Every merge deploys, the automatic
+  ones included (see Deploys), so a major that migrates data one way reaches the server unattended: the nightly
+  backup plus a revert pull request are the way back (restore from the backup to undo a migration).
 - **The Minecraft server version is pinned too.** The Bedrock image downloads the server itself on start; its
   `VERSION` is set in `compose.yaml` (never `LATEST`, never from `.env`), so a new version is a reviewed change
   (worlds upgrade one way). Dependabot doesn't see it: bump it by hand.
@@ -136,9 +138,11 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   the server (a new `.env` setting, a data migration without a recent good backup, an update this file says
   waits for the owner) or the server isn't healthy, and never turns on auto-merge (`gh pr merge --auto`)
   without the owner's OK. Never bypass a check or the ruleset.
-  Dependabot's patch and minor updates and image rebuilds still auto-merge through
-  `dependabot-auto-merge.yml` once every required check passes, so they now deploy unattended; majors wait for the
-  owner. Keeping that auto-merge is the owner's call: don't change `dependabot-auto-merge.yml` without it.
+  Dependabot's patch, minor and major updates and image rebuilds auto-merge through `dependabot-auto-merge.yml`
+  once every required check passes (majors since 2026-10-14), so they deploy unattended; an update Dependabot can't
+  classify waits for the owner. Claude never merges a major update itself: majors are merged only by Dependabot's
+  auto-merge or by the owner. Keeping that auto-merge is the owner's call: don't change
+  `dependabot-auto-merge.yml` without it.
 
 ## Commands
 ```sh

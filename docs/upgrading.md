@@ -8,7 +8,8 @@ automatically instead, where the merge is the upgrade ([Following `main`](#follo
 ## Before you upgrade
 
 1. Read the release notes (the `CHANGELOG.md` section) for every release between yours and the new one, and
-   the services' own release notes for any major version bump. Anything under **Upgrading** needs action.
+   the services' own release notes for any major version bump: Dependabot's major updates merge automatically, so
+   they arrive without a separate review. Anything under **Upgrading** needs action.
 2. Verify the new release ([verifying-releases.md](verifying-releases.md)).
 3. If the release changes the **Minecraft server version**, warn the players: the worlds are upgraded when the
    new server first opens them and can't be opened by the old one again, and clients may need to update too.
@@ -66,8 +67,9 @@ itself ([dependencies.md](dependencies.md#tracking-dependencies)).
   If the configuration doesn't resolve or an image can't be pulled, it moves the checkout back, so the server keeps
   running what it ran.
 - **The merge is the upgrade.** Before merging an update that can migrate a service's data, read the release notes
-  and take a backup on the server (`scripts/backup.sh`). The updates that merge by themselves (patch and minor ones,
-  and image rebuilds) rely on the nightly [scheduled backup](installing.md#scheduled-backups).
+  and take a backup on the server (`scripts/backup.sh`). The updates that merge by themselves (Dependabot's patch,
+  minor and major ones, and image rebuilds) rely on the nightly [scheduled backup](installing.md#scheduled-backups);
+  a major can migrate its data one way, so undoing it means a revert plus a restore from that backup.
 - **Rolling back** is a revert pull request, deployed the same way. If the service already migrated its data,
   restore that too ([Rolling back](#rolling-back)).
 - **Holding the server on a version**: check out that commit or release on the server (`git checkout vX.Y.Z`).

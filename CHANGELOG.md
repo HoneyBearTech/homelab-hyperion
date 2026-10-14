@@ -21,6 +21,10 @@ All notable changes to homelab-hyperion are documented here. The format follows
   `-lsNNN` as a suffix that must match exactly, so it never proposed a new version or build of either; with the
   `version-` tag it proposes both. The digests are unchanged, so the images are exactly the ones pinned before.
   qBittorrent keeps its build tag while it is held at 4.5.5.
+- Dependabot's major updates now merge automatically too, once every required check passes (owner 2026-10-14), so
+  they deploy to the maintainer's server unattended. A major can migrate a service's data one way: the nightly
+  backup and `scripts/restore.sh` are the way back, not a revert alone. An update Dependabot can't classify still
+  waits for the maintainer; qBittorrent stays held and the Minecraft server's version is still set by hand.
 
 
 ## [0.2.0] - 2026-10-14

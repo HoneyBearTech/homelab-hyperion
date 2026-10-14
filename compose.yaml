@@ -1,6 +1,6 @@
 # The Hyperion stack. Every setting comes from .env (template: .env.example; reference: docs/interfaces.md); the
 # one secret, autoheal's optional webhook, from autoheal.env (template: autoheal.env.example).
-# Every image is pinned as name:tag@sha256:<digest>; Dependabot proposes updates (patch and minor ones merge
+# Every image is pinned as name:tag@sha256:<digest>; Dependabot proposes updates (patch, minor and major ones merge
 # automatically once CI passes). scripts/check_compose.py enforces the policy (docs/security.md#policy).
 
 name: homelab-hyperion
