@@ -58,7 +58,9 @@ services:
 
   qbittorrent:
     <<: *hardened
-    image: lscr.io/linuxserver/qbittorrent:4.5.5-r0-ls292@sha256:6ce86cd2924985385641d5bcac0234e82df2da8baa6e1e02b4c0a95635445410
+    # The plain version tag; this digest is linuxserver's build 5.2.4_v2.0.15-ls480 (libtorrent 2.0). Dependabot
+    # can't compare the build-numbered tags, so with one of those it would never propose an update.
+    image: lscr.io/linuxserver/qbittorrent:5.2.4@sha256:97333cc1ccf903e0bbcd8eb67e3332e4970e9c1ecabe145e499e9c0847ebcaed
     container_name: qbittorrent
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).

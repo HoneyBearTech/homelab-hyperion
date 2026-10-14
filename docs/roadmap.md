@@ -16,7 +16,7 @@ file changes with them, in the same pull request.
   verified version.
 - Done: Hyperion runs the stack from a checkout of this repository, with the existing data, ports and download
   paths.
-- Next: upgrade qBittorrent from 4.5.5 to 5.x, in its own pull request.
+- Done: qBittorrent upgraded from 4.5.5 to 5.2.4, in its own pull request, after the cutover.
 
 ## Next: safe upgrades and rebuilds
 

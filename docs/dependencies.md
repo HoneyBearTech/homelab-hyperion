@@ -54,9 +54,10 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   policy check and the smoke test, CodeQL, dependency review).
 - **Major updates are merged by hand**, after reading the service's release notes: a new major version can
   migrate its data one way.
-- **qBittorrent is held at 4.5.5** for now: Dependabot ignores it until the server has moved to this stack, so
-  the move changes one thing at a time. The upgrade to 5.x is its own pull request, with a backup first, and
-  removes the `ignore` entry.
+- **qBittorrent is pinned by its plain version tag** (such as `5.2.4`, with the digest of linuxserver.io's build
+  of it), not by a build-numbered tag such as `5.2.4_v2.0.15-ls480`: Dependabot can't compare those, so it would
+  never propose an update. With the plain tag it proposes new versions and, as a digest update, new builds of the
+  same version. Two stale 2021 tags (`14.3.9`, `20.04.1`) that look newer are ignored.
 - **A merge doesn't deploy.** The server runs what it last pulled; updates reach it when the operator pulls
   and redeploys, with a backup first ([upgrading.md](upgrading.md)).
 - **Dependency review** blocks a pull request that adds or changes a Python or Actions dependency with a known
@@ -88,16 +89,12 @@ version somewhere upstream). Every image is maintained. autoheal and the socket 
 `v2.8.3-ls366` (9 of 20: Alpine's `apache2-utils` and `pcre2`) and the Minecraft image `2026.10.0` (12 of 40:
 Debian's OpenSSL and PCRE2, `mc-monitor`'s Go dependencies). The Minecraft server's own version is unchanged.
 
-**Accepted until the planned upgrade: qBittorrent 4.5.5** (171, 8 of them critical). The stack starts on the
-version the server already runs, so moving to it changes one thing at a time; the upgrade to 5.x follows in its
-own pull request ([roadmap](roadmap.md)), and no 4.x build is newer than 2024. Nearly all the findings are in
-the image's 2023 Alpine packages (OpenSSL 3.1.3, expat, PCRE2, curl, Python, musl, zlib). Two of the critical
-ones don't apply: CVE-2024-3094 is the xz backdoor, which only ever shipped in xz 5.6.0 and 5.6.1 (the image has
-5.4.4), and CVE-2026-31789 affects OpenSSL on 32-bit systems only. qBittorrent's own finding, CVE-2024-51774
-(before 5.0.1 it keeps using an HTTPS connection whose certificate failed validation), is reachable only from
-the network path of what qBittorrent fetches over HTTPS itself: RSS feeds, torrent URLs, its GeoIP database.
-Mitigated by keeping the web UI on the LAN and forwarding only the listening port
-([installing.md](installing.md#running-it-securely)).
+**Fixed by the upgrade to qBittorrent 5.2.4** (14 October 2026): all 171 on qBittorrent 4.5.5, 8 of them
+critical. The stack started on the version the server already ran, so moving to it changed one thing at a time,
+and accepted these until the upgrade; no 4.x build is newer than 2024. Nearly all were in the image's 2023 Alpine
+packages (OpenSSL 3.1.3, expat, PCRE2, curl, Python, musl, zlib), plus qBittorrent's own CVE-2024-51774 (before
+5.0.1 it kept using an HTTPS connection whose certificate failed validation). The new image (linuxserver.io's
+build `5.2.4_v2.0.15-ls480`, Alpine 3.24) has none, scanned with the same settings as the weekly scan.
 
 **Open, waiting for upstream** (87). No newer image exists yet with the fixed package; each alert closes by
 itself when Dependabot's bump to such an image is merged and the scan runs again.

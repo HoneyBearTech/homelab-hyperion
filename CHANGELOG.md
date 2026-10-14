@@ -6,6 +6,49 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- qBittorrent 5.2.4 (linuxserver.io's build `5.2.4_v2.0.15-ls480`, libtorrent 2.0.15) replaces 4.5.5
+  (`4.5.5-r0-ls292`, from 2023), with the same capabilities, ports and paths. It is pinned by its plain version
+  tag (`5.2.4`) and digest, and Dependabot now proposes its updates like the other images': its blanket `ignore`
+  entry is gone (Dependabot can't compare build-numbered tags like `5.2.4_v2.0.15-ls480`; two stale 2021 tags
+  that look newer stay ignored). A new minor or major qBittorrent version can migrate its settings, so read its
+  release notes before deploying one.
+
+### Security
+
+- The upgrade fixes all 171 image-scan findings on qBittorrent 4.5.5 (8 of them critical), nearly all in its
+  2023 Alpine packages, and qBittorrent's own CVE-2024-51774 (before 5.0.1 it kept using an HTTPS connection whose
+  certificate failed validation). The new image has no HIGH or CRITICAL finding with a fix (Trivy, `linux/amd64`,
+  14 October 2026). qBittorrent 5.x also brings upstream's later fixes, among them server-side request forgery
+  through HTTP redirects (5.2.1) and RSS and search results opening only http(s) URLs (5.2.4).
+
+### Upgrading
+
+- **Back up first** (`scripts/backup.sh`, [docs/upgrading.md](docs/upgrading.md#backing-up)); the downloads
+  directory isn't touched by the upgrade and isn't in the backup.
+- **qBittorrent migrates its settings one way on its first start.** In `qBittorrent.conf`, "add torrents paused"
+  becomes "add torrents stopped", the action when a share limit is reached and the proxy settings move to new
+  keys, and the old keys are removed. The torrent list, categories, save paths and the web UI password are kept as
+  they are. qBittorrent 4.5.5 still starts on the migrated data (tested on a throwaway profile: torrents,
+  categories and password survived), but falls back to its defaults for the moved settings. **To roll back,
+  restore the backup** rather than only changing the image: `git checkout v0.2.0`, then
+  `scripts/restore.sh backups/<date>-<time> qbittorrent` and `docker compose up -d qbittorrent`. Torrents added
+  after the backup are then missing from the list; their files stay in the downloads directory.
+- **Web UI login.** A password you set keeps working. Since 4.6.1, qBittorrent no longer accepts the old default
+  (`admin`/`adminadmin`): if no password was ever set, it prints a temporary one for `admin` in its log on every
+  start (`docker compose logs qbittorrent`) until you set your own.
+- **The listening port is now set from `TORRENTING_PORT`** (6881) on every start. The 4.5.5 image ignored that
+  variable and used the port saved in qBittorrent's settings; if yours was different, it is overridden.
+- **Media apps** use qBittorrent 5's Web API, which calls pausing and resuming "stopping" and "starting". Use a
+  current Sonarr, Radarr or Lidarr, run each one's download client test, and check that a new download starts.
+- **Disk I/O.** 4.5.5 already used libtorrent 2.0, so nothing changes by default (memory-mapped files). If its
+  memory use climbs, for example with the downloads directory on a network share, qBittorrent's Advanced settings
+  offer the disk I/O type "Simple pread/pwrite" (new in 5.0.1), which upstream recommends against it.
+- **After the upgrade, check** that every torrent is listed with its category and save path and resumes (none
+  "Missing files" or "Errored"; a full recheck isn't expected), that you can sign in to the web UI, that the
+  categories and the default save path are unchanged, and the media apps as above.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added

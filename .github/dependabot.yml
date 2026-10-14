@@ -11,9 +11,10 @@ updates:
       interval: "weekly"
     assignees: ["HoneyBearTech"]
     ignore:
-      # qBittorrent stays on 4.5.5 until the server has moved to this stack, so the move changes one thing at a
-      # time; the upgrade is its own pull request, which removes this entry.
+      # Two stale 2021 tags of qBittorrent's image look like newer versions than 5.x (they name an old build's
+      # Ubuntu base); without this, Dependabot would propose them.
       - dependency-name: "*qbittorrent"
+        versions: ["14.3.9", "20.04.1"]
 
   # The check and test tools (requirements-dev.txt), pinned with hashes.
   - package-ecosystem: "pip"
