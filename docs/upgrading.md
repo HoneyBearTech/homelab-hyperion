@@ -19,7 +19,8 @@ anything you depend on.
 The state worth keeping is each service's data: Prowlarr's database (with the indexers and their credentials),
 qBittorrent's settings and torrent list, Heimdall's database, and the Minecraft server's worlds and settings.
 `scripts/backup.sh` stops each service in turn while it copies that service's mounts, so its database or world is
-consistent, starts it again, then compresses the copy; it also copies `.env` and any `<service>.env`:
+consistent, starts it again (with any service Compose stopped along with it), then compresses the copy; services
+with nothing to archive keep running. It also copies `.env` and any `<service>.env` (such as `autoheal.env`):
 
 ```sh
 scripts/backup.sh                       # into backups/<date>-<time>/ in the checkout (gitignored)
@@ -27,13 +28,16 @@ scripts/backup.sh /path/to/backup-dir   # or a directory of your choice (new or 
 ```
 
 It **never** archives the downloads directory: it is large, and the apps that import from it keep their own
-copies.
+copies. A service can also leave paths inside a mount out of its archive with the
+`org.honeybeartech.hyperion.backup.exclude` label ([interfaces.md](interfaces.md#labels)); no service does yet.
 
 The directory holds one `<service>--<path>.tar.gz` per mount, the settings under `env/`, a `MANIFEST` naming
-each archive's service, container path, host path and image, and `SHA256SUMS`. Everything in it is readable
-only by the user who ran the backup, and it holds secrets (Prowlarr's indexer credentials among them). **Copy it
-off the host**: the nightly scheduled backup does that for you ([installing.md](installing.md#scheduled-backups)),
-but take a fresh one before an upgrade all the same.
+each archive's service, container path, host path and image, `NETWORKS` (the address range of each network the
+stack joins but doesn't create, for a rebuild; this stack creates its own, so only the header), `VERSION` (the
+checkout's `git describe`) and `SHA256SUMS`. Everything in it is readable only by the user who ran the backup,
+and it holds secrets (Prowlarr's indexer credentials among them). **Copy it off the host**: the nightly
+scheduled backup does that for you ([installing.md](installing.md#scheduled-backups)), but take a fresh one
+before an upgrade all the same.
 
 ## Upgrading
 
@@ -60,8 +64,9 @@ scripts/restore.sh backups/YYYYMMDD-HHMMSS prowlarr   # checks SHA256SUMS, lists
 docker compose up -d prowlarr
 ```
 
-`scripts/restore.sh` replaces everything in each of the service's mounts listed in the backup's `MANIFEST`,
-keeping the files' owners and modes. Without service names it restores every service in the backup. Rolling
+`scripts/restore.sh` replaces everything in each of the service's mounts listed in the backup's `MANIFEST`
+(except the paths its `backup.exclude` label lists and any mount inside it), keeping the files' owners and modes.
+Without service names it restores every service in the backup. Rolling
 the Minecraft server back to an older version needs its world restored too, which loses whatever players built
 since the backup.
 

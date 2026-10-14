@@ -46,6 +46,9 @@ git checkout vX.Y.Z      # the release the backup was taken with, or newer; veri
 cp /path/to/backup/env/.env .env && chmod 600 .env
 ```
 
+The backup's `VERSION` names the release (or commit) the old host ran; backups made before it existed don't
+have one, so check the release notes instead.
+
 Copy any `<service>.env` from the backup's `env/` the same way (mode `600`). Edit `.env` if the new host's
 paths differ (but keep the downloads' container path), create the data directories as your user, then:
 

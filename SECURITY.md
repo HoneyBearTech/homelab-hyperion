@@ -54,8 +54,8 @@ Known vulnerabilities in the images the stack runs are handled as described in
 ## Scope
 
 homelab-hyperion is a Docker Compose stack: a version-pinned selection of upstream images (Prowlarr,
-qBittorrent, Heimdall, Dozzle, autoheal and a Minecraft Bedrock server), how they're wired together, a policy checker and backup scripts. What it does and doesn't protect against
-is described in [docs/security.md](docs/security.md) (its security requirements), and the reasoning in
+qBittorrent, Heimdall, Dozzle, autoheal and a Minecraft Bedrock server), how they're wired together, a
+policy checker and backup scripts. What it does and doesn't protect against is described in [docs/security.md](docs/security.md) (its security requirements), and the reasoning in
 [docs/assurance-case.md](docs/assurance-case.md) (threat model, trust boundaries and the defences against
 common weaknesses).
 
@@ -63,7 +63,8 @@ In scope: anything that breaks the guarantees in those documents, for example a 
 that runs privileged, mounts the Docker socket or exposes a port it shouldn't without a documented reason,
 an image that isn't pinned by digest, a release file that doesn't match its signature, a weakness in the
 policy checker that lets such a service through, a backup or restore script that exposes or overwrites data it
-shouldn't (including the downloads directory, which it must never touch), or a committed file that leaks a secret. Not
+shouldn't (including the downloads directory, which it must never touch, and any path a service's
+`backup.skip` or `backup.exclude` label leaves out), or a committed file that leaks a secret. Not
 vulnerabilities: anything that needs write access to the host, the `.env` file or the services' data
 (they are trusted), and vulnerabilities in the services or images themselves, which belong with those
 projects. Please tell us too if homelab-hyperion's configuration makes one worse.

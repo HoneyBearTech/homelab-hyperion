@@ -39,7 +39,9 @@ on the host, or write access to `.env` or the services' data.
 5. **Containers → Docker API.** Dozzle (read-only socket mount) and the socket proxy only; autoheal through the
    proxy.
 6. **Containers → host.** Only each service's data directories and the downloads; no host namespaces.
-7. **Pull requests → CI.** Fork pull requests get a read-only token and no secrets.
+7. **Pull requests → CI.** Fork pull requests get a read-only token and no secrets. The project's one
+   secret, a Docker Hub token that can only read public images (once the maintainer adds it), is logged out
+   before the smoke test starts any container.
 
 ## Secure design principles
 
