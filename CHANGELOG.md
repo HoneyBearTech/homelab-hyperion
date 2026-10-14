@@ -6,6 +6,14 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Prowlarr and Heimdall are pinned by their linuxserver.io `version-<app version>` tag (`version-2.6.5.5623`,
+  `version-v2.8.3`) instead of the build tag (`2.6.5.5623-ls163`, `v2.8.3-ls366`). Dependabot reads a build tag's
+  `-lsNNN` as a suffix that must match exactly, so it never proposed a new version or build of either; with the
+  `version-` tag it proposes both. The digests are unchanged, so the images are exactly the ones pinned before.
+  qBittorrent keeps its build tag while it is held at 4.5.5.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added
