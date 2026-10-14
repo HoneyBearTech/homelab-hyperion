@@ -54,6 +54,11 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   policy check and the smoke test, CodeQL, dependency review).
 - **Major updates are merged by hand**, after reading the service's release notes: a new major version can
   migrate its data one way.
+- **linuxserver.io images are pinned by their `version-<app version>` tag**
+  (`prowlarr:version-2.6.5.5623@sha256:…`), which always points at the newest build of that app version. Dependabot
+  can't follow the build tags (`2.6.5.5623-ls163`): it reads `-ls163` as a suffix that must match exactly, so it
+  never proposes another build. With the `version-` tag it proposes both new app versions and rebuilds (a new digest
+  under the same tag). socket-proxy uses its bare version tag (`3.4.6`) for the same reason.
 - **qBittorrent is held at 4.5.5** for now: Dependabot ignores it until the server has moved to this stack, so
   the move changes one thing at a time. The upgrade to 5.x is its own pull request, with a backup first, and
   removes the `ignore` entry.

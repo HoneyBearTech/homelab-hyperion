@@ -49,7 +49,9 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 ## Rules for the stack
 - **Every image is pinned as `name:tag@sha256:<digest>`.** Never `latest`, never tag-only (autoheal is the
   documented `allow.latest` exception, as on atlas). Dependabot (`docker-compose` ecosystem) updates tag and
-  digest together. Patch and minor updates auto-merge once the required checks pass; major updates wait for the
+  digest together. linuxserver.io images use their `version-<app version>` tag (socket-proxy its bare version),
+  never the `-lsNNN` build tag: Dependabot can't follow those (qBittorrent, held at 4.5.5, keeps its build tag).
+  Patch and minor updates auto-merge once the required checks pass; major updates wait for the
   owner. A merge never deploys: Hyperion changes only on a deliberate pull.
 - **The Minecraft server version is pinned too.** The Bedrock image downloads the server itself on start; its
   `VERSION` is set in `compose.yaml` (never `LATEST`, never from `.env`), so a new version is a reviewed change

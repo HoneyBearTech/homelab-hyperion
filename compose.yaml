@@ -33,7 +33,7 @@ services:
   # --- Downloads ------------------------------------------------------------------------------------------------
   prowlarr:
     <<: *hardened
-    image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls163@sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902
+    image: lscr.io/linuxserver/prowlarr:version-2.6.5.5623@sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902
     container_name: prowlarr
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
@@ -95,7 +95,7 @@ services:
   # --- Start page and logs --------------------------------------------------------------------------------------
   heimdall:
     <<: *hardened
-    image: lscr.io/linuxserver/heimdall:v2.8.3-ls366@sha256:3c9e97c416c7f6d72a3fc12af01a37bd0e71d9e6588d25c40b47e391f39ff7fd
+    image: lscr.io/linuxserver/heimdall:version-v2.8.3@sha256:3c9e97c416c7f6d72a3fc12af01a37bd0e71d9e6588d25c40b47e391f39ff7fd
     container_name: heimdall
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
