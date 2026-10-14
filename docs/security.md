@@ -63,7 +63,7 @@ failed, logged an error or couldn't stop cleanly without it.
 | prowlarr | `CHOWN`, `SETUID`, `SETGID`, `KILL` | no | Its init (s6-overlay) runs as root, takes ownership of the data for `PUID`:`PGID`, runs Prowlarr as that user and signals it on shutdown. The init runs from `/run` and writes to the image's own directories, so the root stays writable (a `/run` tmpfs is mounted noexec, and the init can't start) |
 | qbittorrent | `CHOWN`, `DAC_OVERRIDE`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also writes the default settings into a data directory that belongs to `PUID` |
 | heimdall | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also sets up nginx, PHP and the app in directories that belong to `PUID` and sets the mode of the app's settings file. Ports 80 and 443 need no capability: Docker lets any process in a container bind low ports |
-| dozzle | none | yes (`/tmp`, `/data` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI (in `/data`, which has no volume here) last until it restarts |
+| dozzle | none | yes (`/tmp` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI go to `/data`, the named volume `dozzle-data`, which Docker creates owned by root |
 | minecraft | `SETUID`, `SETGID` | yes (`/tmp` in memory) | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server; the server and the world are in its data mount |
 | autoheal | none | yes | Only talks to the socket proxy |
 | socket-proxy | none | yes (`/run`, `/tmp` in memory) | Only reads the socket |

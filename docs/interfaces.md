@@ -88,6 +88,7 @@ in the middle of a database migration or while the Minecraft image downloads its
 | `/downloads` | `DOWNLOADS_PATH` | qBittorrent: downloads (read-write; never backed up) |
 | `/config` | `HEIMDALL_CONFIG_PATH` | Heimdall: database and settings |
 | `/data` | `MINECRAFT_DATA_PATH` | Minecraft server: worlds, `server.properties`, allowlist and permissions |
+| `/data` | named volume `dozzle-data` | Dozzle: settings saved in its UI |
 | `/var/run/docker.sock` | the Docker socket, read-only | Dozzle (allowed by label) and the socket proxy (allowed by label) |
 
 The socket proxy and autoheal share the internal network `docker-proxy`, which has no route out and nothing

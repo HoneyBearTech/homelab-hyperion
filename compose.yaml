@@ -132,12 +132,11 @@ services:
     image: amir20/dozzle:v11.3.2@sha256:0d8cf9702f422d65a7e8ad238785dc6b05b2b9c43c945f6bbdf3358ad5da5f6c
     container_name: dozzle
     restart: unless-stopped
-    # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, which has
-    # no volume here: in memory, they last until the container restarts.
+    # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, a named
+    # volume: Docker creates it owned by root, the user Dozzle runs as, so it writes there with no capabilities.
     read_only: true
     tmpfs:
       - /tmp
-      - /data
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "/dozzle", "healthcheck"]
@@ -152,6 +151,7 @@ services:
     ports:
       - "4040:8080"
     volumes:
+      - dozzle-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # --- Games ----------------------------------------------------------------------------------------------------
@@ -281,3 +281,7 @@ services:
 networks:
   docker-proxy:
     internal: true
+
+# Dozzle's settings. Compose names it <project>_dozzle-data; the backup archives it like the data directories.
+volumes:
+  dozzle-data:
