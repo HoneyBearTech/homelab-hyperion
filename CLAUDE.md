@@ -76,8 +76,9 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
   service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.
 - **Every service has a health check** and the `autoheal: "true"` label (autoheal itself excepted, as on atlas).
-- **qBittorrent stays on 4.5.5** until after the cutover (Dependabot ignores it); the 5.x upgrade is its own PR,
-  backup first, and removes the ignore entry.
+- **qBittorrent is pinned by its plain version tag** (`5.2.4@sha256:…`, the digest of linuxserver's build), not
+  by a build-numbered tag (`5.2.4_v2.0.15-ls480`), which Dependabot can't compare. Its Dependabot `ignore` only
+  drops two stale 2021 tags (`14.3.9`, `20.04.1`). Upgraded from 4.5.5 after the cutover.
 - **Never change the live server** (Hyperion) without the owner asking: no `docker compose up`, no edits to
   service data, qBittorrent torrents, Prowlarr indexers, Minecraft worlds, or Portainer stacks. Read-only
   inspection (`docker ps`, `docker inspect`) only when asked.
