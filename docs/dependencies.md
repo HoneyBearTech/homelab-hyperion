@@ -52,6 +52,8 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   of their own version).
 - **Patch and minor updates merge automatically** once every required check has passed (CI with the Compose
   policy check and the smoke test, CodeQL, dependency review).
+- **Image rebuilds merge automatically too**: a pull request that only moves an image to a new digest under the
+  same tag (a rebuild of the same app version, with newer base packages) and changes nothing else in `compose.yaml`.
 - **Major updates are merged by hand**, after reading the service's release notes: a new major version can
   migrate its data one way.
 - **linuxserver.io images are pinned by their `version-<app version>` tag**
