@@ -15,6 +15,8 @@ All notable changes to homelab-hyperion are documented here. The format follows
 - Every backup has a `NETWORKS` file (the address range of each network the stack joins but doesn't create, so a
   rebuilt host can recreate it the same; this stack creates its own networks, so the file holds only its header)
   and a `VERSION` file (the checkout's `git describe`, the release the host ran). The smoke test checks both.
+- The smoke test owns its throwaway data directories by `PUID`:`PGID` with mode 0755, as on the host, instead of
+  making them writable by everyone, so a service that couldn't write its data on the host fails in CI too.
 - `.gitlab-ci.yml`, for a copy of the repository on the maintainer's self-hosted GitLab: a scheduled job mirrors
   GitHub into it, and every commit there re-runs the checks that need no Docker daemon. It does nothing until
   that GitLab project, its `MIRROR_TOKEN` variable and the schedule exist.

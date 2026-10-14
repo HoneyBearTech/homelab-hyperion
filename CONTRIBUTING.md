@@ -40,8 +40,8 @@ the checker's unit tests with a coverage floor, `docker compose config` and the 
 ([`scripts/check_compose.py`](scripts/check_compose.py)). "Stack smoke test"
 ([`scripts/smoke-test.sh`](scripts/smoke-test.sh)), on an amd64 runner like the server, pulls the pinned
 images (logged in to Docker Hub with the project's read-only token when it's set, and logged out again before
-anything starts), starts every service with throwaway directories and volumes, fails unless each one reports
-healthy within five minutes, runs a backup and restore round trip over every data mount, checks that mounts and
+anything starts), starts every service with throwaway directories (owned by `PUID`:`PGID`, mode 0755, as on
+the host) and volumes, fails unless each one reports healthy within five minutes, runs a backup and restore round trip over every data mount, checks that mounts and
 paths excluded from backups (the downloads directory) are neither archived nor overwritten and that the backup
 records `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the copy
 and the pruning, and checks that autoheal restarts a container that turns unhealthy. CodeQL, dependency review,
