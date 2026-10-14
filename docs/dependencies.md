@@ -64,12 +64,13 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
 - **qBittorrent is held at 4.5.5** for now: Dependabot ignores it until the server has moved to this stack, so
   the move changes one thing at a time. The upgrade to 5.x is its own pull request, with a backup first, and
   removes the `ignore` entry.
-- **A merge doesn't deploy.** The server runs what it last pulled; updates reach it when the operator pulls
-  and redeploys, with a backup first ([upgrading.md](upgrading.md)).
+- **A merge deploys.** The maintainer's server follows `main` with a pull agent, so every merge, the automatic
+  ones included, reaches it within about two minutes ([upgrading.md](upgrading.md#following-main)). That's why
+  the updates that can migrate data wait for the maintainer, who takes a backup before merging them.
 - **Dependency review** blocks a pull request that adds or changes a Python or Actions dependency with a known
   vulnerability of moderate severity or higher, or a license outside the allowlist.
-- **Nothing updates itself on the host.** Auto-updaters such as Watchtower are not used: they would run
-  versions nobody reviewed.
+- **Nothing on the host updates from a registry.** Auto-updaters such as Watchtower are not used: they would run
+  versions nobody reviewed. The pull agent only applies commits merged into `main`.
 
 ## Policy for vulnerabilities in dependencies
 

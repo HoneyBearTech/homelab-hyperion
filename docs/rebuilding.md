@@ -46,6 +46,9 @@ git checkout vX.Y.Z      # the release the backup was taken with, or newer; veri
 cp /path/to/backup/env/.env .env && chmod 600 .env
 ```
 
+A server that follows `main` ([upgrading.md](upgrading.md#following-main)) stays on `main` here instead
+(skip the `git checkout`), and gets its pull agent back once the stack is healthy.
+
 The backup's `VERSION` names the release (or commit) the old host ran; backups made before it existed don't
 have one, so check the release notes instead.
 

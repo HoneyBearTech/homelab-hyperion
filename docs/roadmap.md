@@ -46,7 +46,8 @@ file changes with them, in the same pull request.
 - **Back up the downloads.** They are transient; the apps that import them keep their own copies.
 - **Provide a VPN** or otherwise hide qBittorrent's traffic. That's a decision for each operator and network.
 - **Store secrets.** No logins, tokens or keys in the repository, encrypted or not.
-- **Auto-update.** Every version change is a reviewed commit.
+- **Auto-update from registries.** Every version change is a commit in `main` that passed CI; the server applies
+  only those.
 - **Run the other services on the same host** (the media server, the transcoder, monitoring agents). They have
   their own setup, even where they share the host.
 - **Be a general-purpose homelab distribution.** It describes one server; others are welcome to fork or borrow

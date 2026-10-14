@@ -15,7 +15,8 @@ the secure design principles it follows, and how common weaknesses are countered
 | The web UIs | Someone on the LAN uses a service | LAN only, behind a reverse proxy's access lists; every login the service offers turned on ([installing.md](installing.md#running-it-securely)) |
 | Indexer credentials, logins | Committed to the public repository | Kept in the services' data, never in the repo; `.gitignore`; GitHub push protection; gitleaks over the history in CI |
 | Indexer credentials, logins | Leaked through a backup or Dozzle's log view | `scripts/backup.sh` writes backups readable only by the user who ran it, documented as secret, to be kept off the host; Dozzle treated as admin access |
-| The services' data | An upgrade that migrates and breaks it (including a Minecraft world opened by a newer server) | Backup before every upgrade; rollback = old tag + `scripts/restore.sh`, exercised by the CI smoke test against the real stack; the Minecraft server version changes only by hand |
+| The services' data | An upgrade that migrates and breaks it (including a Minecraft world opened by a newer server) | Backup before every update merged by hand, nightly otherwise; rollback = a revert (or the old tag) + `scripts/restore.sh`, exercised by the CI smoke test against the real stack; the Minecraft server version changes only by hand |
+| The host | A bad change merged to `main` deploying by itself | The required checks (policy check, smoke test) pass before any merge; majors and the Minecraft server's version are merged by hand; the pull agent only fast-forwards and backs out a change that doesn't resolve or pull; rollback is a revert pull request |
 | The services' data | A crafted backup writing outside the services' data | `restore.sh` verifies `SHA256SUMS` (which covers the `MANIFEST`), accepts only plain archive names and absolute container paths without `..`, and writes only a mount the service has read-write and doesn't exclude from backups |
 | Availability | A service hangs without exiting | A health check on every service and autoheal restarting unhealthy containers, checked by the smoke test |
 | The release | Tampered release files | Keyless-signed `SHA256SUMS`, SLSA provenance, signed tags |
@@ -31,8 +32,9 @@ on the host, or write access to `.env` or the services' data.
 
 1. **Registries → host.** Images are trusted only at the digest a reviewed commit names; the Minecraft server
    binary only at the version a reviewed commit names, downloaded over HTTPS from Minecraft's site.
-2. **Repository → host.** The host runs a tagged, signed release or a reviewed `main`; it never pulls code
-   that wasn't merged.
+2. **Repository → host.** The maintainer's host runs `main`: a pull agent fetches it and only fast-forwards,
+   refusing rewritten history and local changes, so the host never runs code that wasn't merged.
+   Nothing connects in to the host to deploy. (Others can run a tagged, signed release instead.)
 3. **LAN → web UIs.** Not published beyond the LAN; reached through a reverse proxy with access lists.
 4. **Internet → qBittorrent's listening port and the Minecraft port.** The only ports meant to face the
    internet, and only if the operator forwards them.
@@ -52,7 +54,7 @@ on the host, or write access to `.env` or the services' data.
   needs a reason, in the file, in review. `restore.sh` refuses anything in a backup it can't account for. The
   Minecraft server won't start without an explicit EULA setting.
 - **Complete mediation**: every change to what runs passes through a pull request and the same checks;
-  nothing on the host updates itself.
+  the host only fast-forwards to merged commits.
 - **Economy of mechanism**: one Compose file, one standard-library checker, upstream images unchanged.
 - **Separation of privilege**: secrets live with the services, settings in `.env`, configuration in git.
 - **Open design**: the whole configuration, policy and release process are public.

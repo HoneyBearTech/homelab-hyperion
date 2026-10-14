@@ -3,8 +3,7 @@
 The Docker Compose stack for Hyperion, the owner's homelab Ubuntu server (24.04, amd64, a VM, no GPU):
 Prowlarr, qBittorrent, Heimdall, Dozzle, a Minecraft Bedrock server, and autoheal behind a socket proxy, every
 image pinned by tag and digest so the server can be upgraded and rebuilt from this repository. Hyperion runs the
-stack from a checkout of a release tag (cut over 2026-10-13); its nightly backups go off the host. Deploying a
-release: `git fetch --tags && git checkout vX.Y.Z && docker compose up -d`, only when the owner asks.
+stack from a checkout of `main` that a pull agent deploys (see Deploys below); its nightly backups go off the host.
 
 ## Before Making Structural Changes
 Read the project's notes first. They live outside this repo, in the owner's Obsidian vault **Chronos** at
@@ -52,7 +51,7 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   together. linuxserver.io images use their `version-<app version>` tag (socket-proxy its bare version), never the
   `-lsNNN` build tag: Dependabot can't follow those (qBittorrent, held at 4.5.5, keeps its build tag). Patch and
   minor updates, and image rebuilds (same tag, new digest; owner 2026-10-14), auto-merge once the required checks
-  pass; major updates wait for the owner. A merge never deploys: Hyperion changes only on a deliberate pull.
+  pass; major updates wait for the owner. Every merge deploys, the automatic ones included (see Deploys).
 - **The Minecraft server version is pinned too.** The Bedrock image downloads the server itself on start; its
   `VERSION` is set in `compose.yaml` (never `LATEST`, never from `.env`), so a new version is a reviewed change
   (worlds upgrade one way). Dependabot doesn't see it: bump it by hand.
@@ -80,15 +79,26 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - **Every service has a health check** and the `autoheal: "true"` label (autoheal itself excepted, as on atlas).
 - **qBittorrent stays on 4.5.5** until after the cutover (Dependabot ignores it); the 5.x upgrade is its own PR,
   backup first, and removes the ignore entry.
-- **Never change the live server** (Hyperion) without the owner asking: no `docker compose up`, no edits to
-  service data, qBittorrent torrents, Prowlarr indexers, Minecraft worlds, or Portainer stacks. Read-only
-  inspection (`docker ps`, `docker inspect`) only when asked.
+- **Never change the live server** (Hyperion) without the owner asking: no merge (a merge deploys), no
+  `docker compose up`, no edits to service data, qBittorrent torrents, Prowlarr indexers, Minecraft worlds, or
+  Portainer stacks. Read-only inspection (`docker ps`, `docker inspect`) only when asked.
 - Every setting goes through `.env` (`${VAR:?…}` in compose when required) and is listed in `.env.example`
   and `docs/interfaces.md`.
 - **Container paths and ports are load-bearing**: Sonarr, Radarr and Lidarr on another host reach Prowlarr and
   qBittorrent by their published ports, qBittorrent's saved torrents record their download paths, and players
   reach the Minecraft server on TCP 19132 and UDP 19140–19149 (NetherNet). Adopt the existing data and keep
   paths and ports the same; see the cutover plan in Chronos.
+
+## Deploys (owner's decision 2026-10-14)
+- **A merge to `main` deploys.** A pull agent on Hyperion (systemd user timer `homelab-pull@hyperion`, from the
+  owner's private homelab-ops repo; rolled out host by host, see Chronos) fetches `main` about every 90 s. When it
+  moved, the agent fast-forwards the checkout and runs `docker compose config --quiet`, `docker compose pull` and
+  `docker compose up -d --remove-orphans --wait`: a merge is live within about two minutes. It refuses local changes
+  and non-fast-forward history, and moves the checkout back if config or pull fails.
+- **Rollback is a revert PR**, deployed the same way. A revert doesn't undo a data migration: then the backup and
+  `scripts/restore.sh` are the way back, with the owner.
+- **Pinning by hand**: the owner checks out another commit or tag on the host; the agent pauses until the checkout
+  is on `main` again. Release tags stay as signed, verified snapshots; they no longer drive deploys.
 
 ## Stack
 - Docker Compose v2 (`compose.yaml`), upstream images: Prowlarr, qBittorrent, Heimdall
@@ -120,8 +130,12 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - Required checks in the `main` ruleset (once the owner sets it up): `CI / Checks + tests`,
   `CI / Stack smoke test`, DCO sign-off, Dependency review, CodeQL's Analyze (python) / Analyze (actions). Don't
   rename those jobs.
-- Claude opens a PR for every change and may turn on auto-merge for it (`gh pr merge --auto --squash`), as on
-  the sibling repos. Never bypass a check or the ruleset.
+- **Merging (owner's decision 2026-10-14):** Claude opens a PR for every change. A merge deploys (see Deploys),
+  so Claude never merges and never turns on auto-merge (`gh pr merge --auto`) for a PR without the owner's OK for
+  that PR, and says in the question that merging deploys to Hyperion. Never bypass a check or the ruleset.
+  Dependabot's patch and minor updates and image rebuilds still auto-merge through
+  `dependabot-auto-merge.yml` once every required check passes, so they now deploy unattended; majors wait for the
+  owner. Keeping that auto-merge is the owner's call: don't change `dependabot-auto-merge.yml` without it.
 
 ## Commands
 ```sh

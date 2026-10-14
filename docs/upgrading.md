@@ -1,9 +1,9 @@
 # Upgrading
 
 A homelab-hyperion release changes which image versions run, and sometimes the services or settings. Services often
-migrate their database when they start a new version and can't go back afterwards, so **every upgrade starts
-with a backup**. The same steps apply to updating a checkout of `main`, which is possible but unsupported for
-anything you depend on.
+migrate their database when they start a new version and can't go back afterwards, so **every upgrade starts with a
+backup**. The same steps apply to updating a checkout of `main` by hand; the maintainer's server follows `main`
+automatically instead, where the merge is the upgrade ([Following `main`](#following-main)).
 
 ## Before you upgrade
 
@@ -53,6 +53,26 @@ Then check each service's web UI and logs (`docker compose logs <service>`, or D
 that Prowlarr's indexers still test green and the media apps still reach Prowlarr and qBittorrent, and that a
 player can join the Minecraft server.
 
+## Following `main`
+
+The maintainer's server doesn't check out releases: it runs `main`, and a small pull agent (kept in the
+maintainer's private orchestration repository, not here) deploys every merge. A systemd user timer starts it about
+every 90 seconds; when `main` has moved, it fast-forwards the checkout, runs `docker compose config --quiet`,
+`docker compose pull` and `docker compose up -d --remove-orphans --wait`, and logs the old and the new commit. So
+**a merge to `main` reaches the server within about two minutes**, including the updates Dependabot merges by
+itself ([dependencies.md](dependencies.md#tracking-dependencies)).
+
+- The agent only fast-forwards: it refuses a checkout with local changes or a `main` whose history was rewritten.
+  If the configuration doesn't resolve or an image can't be pulled, it moves the checkout back, so the server keeps
+  running what it ran.
+- **The merge is the upgrade.** Before merging an update that can migrate a service's data, read the release notes
+  and take a backup on the server (`scripts/backup.sh`). The updates that merge by themselves (patch and minor ones,
+  and image rebuilds) rely on the nightly [scheduled backup](installing.md#scheduled-backups).
+- **Rolling back** is a revert pull request, deployed the same way. If the service already migrated its data,
+  restore that too ([Rolling back](#rolling-back)).
+- **Holding the server on a version**: check out that commit or release on the server (`git checkout vX.Y.Z`).
+  The agent pauses while the checkout isn't on `main`, and carries on once it's switched back (`git switch main`).
+
 ## Rolling back
 
 If a service fails after the upgrade, go back to the previous version **and** restore its data; a service whose
@@ -63,6 +83,9 @@ git checkout vPREVIOUS
 scripts/restore.sh backups/YYYYMMDD-HHMMSS prowlarr   # checks SHA256SUMS, lists what it replaces, asks first
 docker compose up -d prowlarr
 ```
+
+On a server that follows `main`, revert the change with a pull request instead of checking out the old release
+(the merge deploys the old version), then restore the service's data the same way.
 
 `scripts/restore.sh` replaces everything in each of the service's mounts listed in the backup's `MANIFEST`
 (except the paths its `backup.exclude` label lists and any mount inside it), keeping the files' owners and modes.
