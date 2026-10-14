@@ -26,6 +26,17 @@ All notable changes to homelab-hyperion are documented here. The format follows
   backup and `scripts/restore.sh` are the way back, not a revert alone. An update Dependabot can't classify still
   waits for the maintainer; qBittorrent stays held and the Minecraft server's version is still set by hand.
 
+### Fixed
+
+- `scripts/backup.sh` and `scripts/restore.sh` no longer race the pull agent. On a server whose agent deploys
+  `main`, they first wait for a running deploy to finish (up to 30 minutes, then fail before stopping anything) and
+  hold the agent's lock until they exit, so a merge that lands during the nightly backup can no longer recreate a
+  service the backup has stopped for its copy, or one a restore is filling; it deploys once they're done. Without
+  the agent (CI, a workstation, a server upgraded by hand) nothing changes. On such a server `flock` (util-linux)
+  is now required.
+- Docs: a deploy doesn't install changed systemd units; copy `deploy/systemd/` again and reload when they change
+  ([docs/upgrading.md](docs/upgrading.md#following-main)). Leftover wording from before pull deploys corrected.
+
 
 ## [0.2.0] - 2026-10-14
 

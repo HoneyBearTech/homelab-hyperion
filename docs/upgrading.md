@@ -74,6 +74,16 @@ itself ([dependencies.md](dependencies.md#tracking-dependencies)).
   restore that too ([Rolling back](#rolling-back)).
 - **Holding the server on a version**: check out that commit or release on the server (`git checkout vX.Y.Z`).
   The agent pauses while the checkout isn't on `main`, and carries on once it's switched back (`git switch main`).
+- **Backups and deploys take turns.** `scripts/backup.sh` and `scripts/restore.sh` share the agent's lock: they
+  wait for a running deploy to finish (up to 30 minutes, then fail before stopping anything), and while they hold
+  the lock the agent skips its runs, so it never recreates a service they have stopped. A merge that lands during
+  the nightly backup deploys a minute or two after the backup's copies are done. Where no agent runs, the lock is
+  skipped.
+- **Changed systemd units aren't installed by the deploy.** The agent only runs `docker compose`; the scheduled
+  backup's units in `deploy/systemd/` are copied into `~/.config/systemd/user/` once, by hand
+  ([installing.md](installing.md#scheduled-backups)). When a merge changes them, copy them again and run
+  `systemctl --user daemon-reload` (the scripts they start come from the checkout, so a change to a script needs
+  nothing more).
 
 ## Rolling back
 

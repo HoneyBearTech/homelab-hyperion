@@ -14,13 +14,16 @@
 # `git describe`), and SHA256SUMS, all readable only by the user who ran it: the archives hold logins, tokens and
 # private keys. Copy it off the host (scripts/scheduled-backup.sh does). Restore with scripts/restore.sh. It runs
 # `docker compose` from the checkout, so the standard Compose variables (COMPOSE_PROJECT_NAME, COMPOSE_FILE,
-# COMPOSE_ENV_FILES) select another project, as the smoke test does.
+# COMPOSE_ENV_FILES) select another project, as the smoke test does. On a server whose pull agent deploys main, it
+# first waits for a running deploy to finish and keeps the agent from deploying until it's done (deploy_lock).
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=scripts/lib.sh
 . "$root/scripts/lib.sh"
 cd "$root"
+# Before anything stops: no deploy runs while a service is stopped for its copy.
+deploy_lock
 dest=${1:-backups/$(date +%Y%m%d-%H%M%S)}
 # pigz compresses on every core; gzip on one is several times slower on large archives.
 compress=$(command -v pigz || command -v gzip)

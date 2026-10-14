@@ -131,6 +131,12 @@ one. The downloads are never part of them.
    journalctl --user -u homelab-hyperion-backup                 # what the last runs did
    ```
 
+   Neither an upgrade nor a deploy by the pull agent installs these units: when a new version changes the files in
+   `deploy/systemd/`, copy them again and run `systemctl --user daemon-reload`.
+
+On a server whose pull agent deploys `main` ([upgrading.md](upgrading.md#following-main)), the backup waits for a
+running deploy to finish and keeps the agent from deploying until its copies are done.
+
 Restore a copy from the backup server as [rebuilding.md](rebuilding.md) describes; `scripts/restore.sh` verifies
 its `SHA256SUMS` first, and a copy that was cut off has none yet, so it is refused.
 

@@ -73,6 +73,8 @@ directory is never archived.
 4. Within about 90 seconds the pull agent on the host sees `main` move, fast-forwards its checkout and runs
    `docker compose pull && docker compose up -d --remove-orphans --wait`
    ([upgrading.md](upgrading.md#following-main)). A rollback is a revert pull request, deployed the same way.
+   While a backup or a restore holds the agent's lock, the agent skips its runs, so it never recreates a service
+   they have stopped; the merge deploys once they're done.
 5. A version tag makes a signed release: a named, verifiable snapshot of `main`.
 
 Nothing updates from a registry by itself: a version that runs is always a version that's in `main`. The host

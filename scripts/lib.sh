@@ -9,6 +9,32 @@ busybox=busybox:1.38.0@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77a
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
 
+# The pull agent (homelab-ops) deploys main on a server that follows it (docs/upgrading.md). deploy_lock waits for a
+# deploy it is running to finish, then holds its lock until the calling script exits, so it can't recreate services
+# while a backup or a restore has them stopped (it skips its runs meanwhile). It does nothing where the agent keeps no
+# state for this stack (CI, a workstation, a server upgraded by hand). The same text in every homelab stack; only
+# pull_stack differs.
+pull_stack=hyperion
+deploy_lock_timeout=1800
+
+deploy_lock() {
+  local dir=${HOMELAB_PULL_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/homelab-pull}/$pull_stack
+  if [ ! -d "$dir" ]; then return 0; fi
+  if ! command -v flock >/dev/null; then
+    echo "error: $dir exists (the pull agent deploys here) but flock isn't installed to lock it" >&2
+    return 1
+  fi
+  exec 9>>"$dir/lock"
+  if ! flock --nonblock 9; then
+    echo "Waiting for a deploy by the pull agent to finish (up to $deploy_lock_timeout s)"
+    if ! flock --timeout "$deploy_lock_timeout" 9; then
+      echo "error: the pull agent's deploy of $pull_stack still holds $dir/lock after $deploy_lock_timeout s;" \
+        "nothing was stopped (check: journalctl --user -u homelab-pull@$pull_stack)" >&2
+      return 1
+    fi
+  fi
+}
+
 # A service label listing container paths (comma-separated, exact) that a backup never archives and a restore never
 # writes: data far too large to back up here, such as a downloads directory, or disposable, such as a cache.
 # shellcheck disable=SC2034 # used by the scripts that source this file

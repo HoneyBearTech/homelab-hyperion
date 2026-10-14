@@ -30,7 +30,8 @@ is a best-effort policy, not a contract.
 - Before 1.0, a minor release (0.2.0) may add, remove or rename services and settings; such changes are
   listed in the changelog under "Upgrading".
 - The services themselves are supported by their own projects. A release pins the versions that were current
-  and tested when it was made; when a service needs a security fix, it comes in a new release with the new
-  image digest.
+  and tested when it was made; when a service needs a security fix, the new image digest lands on `main` as soon
+  as Dependabot's pull request passes every check (and deploys from there on a server that follows `main`), then
+  comes in the next release.
 - If a supported line will end differently, it will be announced in the release notes and in this table
   first.
