@@ -10,7 +10,8 @@ live. The reasoning behind these requirements is in the [assurance case](assuran
    what `docker compose pull` fetches; a new version arrives only as a pull request that changes the pin.
 2. **No container gets more of the host than it needs.** Every service drops every Linux capability, adds back
    only the ones its image needs (never more than Docker's default set) and can't gain privileges from setuid
-   binaries or file capabilities ([Hardening](#hardening)). No service runs privileged, shares the host's
+   binaries or file capabilities. Where an image allows it, its root filesystem is read-only
+   ([Hardening](#hardening)). No service runs privileged, shares the host's
    network or PID namespace, maps a host device, or mounts the Docker socket (which is root on the host),
    unless the exception is written into the service as a reasoned label and reviewed. There are two
    exceptions: Dozzle (read-only mount, to read logs) and the socket proxy (which gives autoheal a filtered API
@@ -52,19 +53,20 @@ a non-empty reason:
 
 What each service runs with, beyond the policy. Every service has `cap_drop: [ALL]` and
 `no-new-privileges:true` and adds back only the capabilities in this table, all from Docker's default set. The
-smoke test proves each one still starts healthy and survives a backup and restore with these settings, and that
-autoheal can still restart a container through the socket proxy. Each capability was kept only after the service
+smoke test, with data directories owned by `PUID`:`PGID` as on the host, proves each one still starts healthy and
+survives a backup and restore with these settings, and that autoheal can still restart a container through the
+socket proxy. Each capability was kept only after the service
 failed, logged an error or couldn't stop cleanly without it.
 
-| Service | Capabilities added back | Why |
-| --- | --- | --- |
-| prowlarr | `CHOWN`, `SETUID`, `SETGID`, `KILL` | Its init (s6-overlay) runs as root, takes ownership of the data for `PUID`:`PGID`, runs Prowlarr as that user and signals it on shutdown |
-| qbittorrent | `CHOWN`, `DAC_OVERRIDE`, `SETUID`, `SETGID`, `KILL` | As Prowlarr; the init also writes the default settings into a data directory that belongs to `PUID` |
-| heimdall | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` | As Prowlarr; the init also sets up nginx, PHP and the app in directories that belong to `PUID` and sets the mode of the app's settings file. Ports 80 and 443 need no capability: Docker lets any process in a container bind low ports |
-| dozzle | none | Reads the Docker socket, which belongs to root, the user it runs as |
-| minecraft | `SETUID`, `SETGID` | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server |
-| autoheal | none | Only talks to the socket proxy |
-| socket-proxy | none | Only reads the socket; its root filesystem is read-only (`/run`, `/tmp` in memory) |
+| Service | Capabilities added back | Read-only root filesystem | Why |
+| --- | --- | --- | --- |
+| prowlarr | `CHOWN`, `SETUID`, `SETGID`, `KILL` | no | Its init (s6-overlay) runs as root, takes ownership of the data for `PUID`:`PGID`, runs Prowlarr as that user and signals it on shutdown. The init runs from `/run` and writes to the image's own directories, so the root stays writable (a `/run` tmpfs is mounted noexec, and the init can't start) |
+| qbittorrent | `CHOWN`, `DAC_OVERRIDE`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also writes the default settings into a data directory that belongs to `PUID` |
+| heimdall | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also sets up nginx, PHP and the app in directories that belong to `PUID` and sets the mode of the app's settings file. Ports 80 and 443 need no capability: Docker lets any process in a container bind low ports |
+| dozzle | none | yes (`/tmp`, `/data` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI (in `/data`, which has no volume here) last until it restarts |
+| minecraft | `SETUID`, `SETGID` | yes (`/tmp` in memory) | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server; the server and the world are in its data mount |
+| autoheal | none | yes | Only talks to the socket proxy |
+| socket-proxy | none | yes (`/run`, `/tmp` in memory) | Only reads the socket |
 
 The root inside a container without capabilities can only reach what it owns. Data adopted from another
 installation must therefore be owned as each image expects: the linuxserver.io services' and the Minecraft

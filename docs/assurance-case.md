@@ -45,8 +45,8 @@ on the host, or write access to `.env` or the services' data.
 
 ## Secure design principles
 
-- **Least privilege**: every capability dropped and only the needed defaults added back, no new privileges, no
-  host namespaces or devices; the Docker API only where a service can't work
+- **Least privilege**: every capability dropped and only the needed defaults added back, no new privileges,
+  read-only root filesystems where the images allow it, no host namespaces or devices; the Docker API only where a service can't work
   without it, filtered for autoheal; read-only CI tokens raised per job.
 - **Fail-safe defaults**: the policy check fails on anything it doesn't recognise as allowed; an exception
   needs a reason, in the file, in review. `restore.sh` refuses anything in a backup it can't account for. The
@@ -63,7 +63,7 @@ on the host, or write access to `.env` or the services' data.
 | --- | --- | --- |
 | CWE-494 (code downloaded without integrity check) | Image pulls; the Minecraft server download | Digest pins; signed release checksums; a pinned server version over HTTPS |
 | CWE-798 / CWE-312 (hard-coded or cleartext credentials) | Compose `environment:`, `.env`, docs | No secrets in the repo; gitleaks; push protection |
-| CWE-250 (unnecessary privileges) | Container settings, Docker socket access | Policy rules `privileged`, `no-new-privileges`, `cap-drop`, `cap-add`, `host-*`, `docker-socket`, `devices`; every capability dropped and only the needed defaults added back ([security.md](security.md#hardening)); the socket proxy for autoheal |
+| CWE-250 (unnecessary privileges) | Container settings, Docker socket access | Policy rules `privileged`, `no-new-privileges`, `cap-drop`, `cap-add`, `host-*`, `docker-socket`, `devices`; every capability dropped and only the needed defaults added back, read-only root filesystems where the images allow it ([security.md](security.md#hardening)); the socket proxy for autoheal |
 | CWE-306 (missing authentication for critical function) | Web UIs | LAN only, behind access lists; logins on where offered |
 | CWE-532 (sensitive information in logs) | Dozzle showing every container's log, on this host and the hosts its agents run on | Dozzle treated as admin access: LAN only, behind access lists and a login |
 | CWE-22 (path traversal) | Restoring a backup | `restore.sh` validates archive names and mount paths from the checksummed `MANIFEST` |

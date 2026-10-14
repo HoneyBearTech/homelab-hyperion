@@ -112,7 +112,7 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
   `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host.
 - Don't run an auto-updater such as Watchtower on these containers; upgrade by release instead.
 - Every service drops every Linux capability, adds back only the ones its image needs, and can't gain new
-  privileges. The policy check refuses privileged containers, capabilities beyond Docker's defaults, host
+  privileges; where its image allows it, its root filesystem is read-only. The policy check refuses privileged containers, capabilities beyond Docker's defaults, host
   networking, device mappings and Docker socket mounts unless a service documents why
   ([docs/security.md](docs/security.md)).
 

@@ -37,6 +37,8 @@ services:
     container_name: prowlarr
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
+    # Its root filesystem stays writable: the init runs from /run (a tmpfs there is mounted noexec, so it can't
+    # start) and writes to the image's own directories.
     cap_add:
       - CHOWN
       - SETUID
@@ -60,6 +62,8 @@ services:
     container_name: qbittorrent
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
+    # Its root filesystem stays writable: the init runs from /run (a tmpfs there is mounted noexec, so it can't
+    # start) and writes to the image's own directories.
     # DAC_OVERRIDE: the init, as root, writes the default settings into a data directory that belongs to PUID.
     cap_add:
       - CHOWN
@@ -95,6 +99,8 @@ services:
     container_name: heimdall
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
+    # Its root filesystem stays writable: the init runs from /run (a tmpfs there is mounted noexec, so it can't
+    # start) and writes to the image's own directories.
     # DAC_OVERRIDE: the init, as root, sets up nginx, PHP and the app in directories that belong to PUID; FOWNER:
     # it sets the mode of the app's settings file (which holds its key). Ports 80 and 443 need no capability: Docker
     # lets any process in the container bind low ports.
@@ -126,6 +132,12 @@ services:
     image: amir20/dozzle:v11.3.2@sha256:0d8cf9702f422d65a7e8ad238785dc6b05b2b9c43c945f6bbdf3358ad5da5f6c
     container_name: dozzle
     restart: unless-stopped
+    # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, which has
+    # no volume here: in memory, they last until the container restarts.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "/dozzle", "healthcheck"]
@@ -156,6 +168,10 @@ services:
     cap_add:
       - SETUID
       - SETGID
+    # The server and the world live in /data (its mount); the entrypoint writes nothing else but temporary files.
+    read_only: true
+    tmpfs:
+      - /tmp
     restart: unless-stopped
     # On stop the image tells the server to save and shut down; give it time to write the world.
     stop_grace_period: 1m
@@ -196,6 +212,7 @@ services:
     image: willfarrell/autoheal:latest@sha256:e7f42d5365c7c4490dd0cafc2858bb9fd2d64a274448d2de2bb5c386f1af7a0f
     container_name: autoheal
     restart: unless-stopped
+    read_only: true
     # autoheal exits if it can't reach the proxy, so it starts only once the proxy answers. (After a host reboot
     # Docker starts both at once; autoheal then restarts until the proxy is up, a few seconds.)
     depends_on:
