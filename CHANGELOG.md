@@ -6,6 +6,8 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-14
+
 ### Added
 
 - Label `org.honeybeartech.hyperion.backup.exclude`: comma-separated paths at any depth inside a service's data
@@ -40,8 +42,9 @@ All notable changes to homelab-hyperion are documented here. The format follows
   qBittorrent `CHOWN DAC_OVERRIDE SETUID SETGID KILL`, Heimdall `CHOWN DAC_OVERRIDE FOWNER SETUID SETGID KILL`,
   the Minecraft server `SETUID SETGID`; Dozzle, autoheal and the socket proxy none. Dozzle, the Minecraft server
   and autoheal also get a read-only root filesystem, as the socket proxy already had (Prowlarr, qBittorrent and
-  Heimdall keep a writable one: their init doesn't start without it). Settings saved in Dozzle's UI now go to a named
-  volume, `dozzle-data`, so they last when it's recreated and are in the backup. The table is in docs/security.md#hardening.
+  Heimdall keep a writable one: their init doesn't start without it). Settings saved in Dozzle's UI now go to a
+  named volume, `dozzle-data`, so they last when it's recreated and are in the backup. The table is in
+  docs/security.md#hardening.
 - The policy check enforces it: new rules `no-new-privileges` and `cap-drop`, and `cap-add` now fails only on a
   capability outside Docker's default set. New rule `devices` (from homelab-deimos): no host device mapped into a
   container (a GPU reservation under `deploy.resources` is allowed). No service maps one.
@@ -123,6 +126,7 @@ copied off the host, and release signing around it.
 - A release workflow that publishes a source archive, the SBOM, `SHA256SUMS` signed keylessly with cosign,
   and SLSA build provenance ([docs/verifying-releases.md](docs/verifying-releases.md)).
 
-[Unreleased]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/HoneyBearTech/homelab-hyperion/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/HoneyBearTech/homelab-hyperion/releases/tag/v0.1.0
