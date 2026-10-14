@@ -54,8 +54,10 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   policy check and the smoke test, CodeQL, dependency review).
 - **Image rebuilds merge automatically too**: a pull request that only moves an image to a new digest under the
   same tag (a rebuild of the same app version, with newer base packages) and changes nothing else in `compose.yaml`.
-- **Major updates are merged by hand**, after reading the service's release notes: a new major version can
-  migrate its data one way.
+- **Major updates merge automatically too** (owner 2026-10-14), once the same checks pass, and reach the
+  maintainer's server unattended. A new major version can migrate its data one way, so a revert alone doesn't undo
+  it: the nightly backup is the way back (`scripts/restore.sh`). Only an update Dependabot can't classify (a tag
+  scheme it doesn't read as a version) is merged by hand.
 - **linuxserver.io images are pinned by their `version-<app version>` tag**
   (`prowlarr:version-2.6.5.5623@sha256:…`), which always points at the newest build of that app version. Dependabot
   can't follow the build tags (`2.6.5.5623-ls163`): it reads `-ls163` as a suffix that must match exactly, so it
@@ -65,8 +67,9 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   the move changes one thing at a time. The upgrade to 5.x is its own pull request, with a backup first, and
   removes the `ignore` entry.
 - **A merge deploys.** The maintainer's server follows `main` with a pull agent, so every merge, the automatic
-  ones included, reaches it within about two minutes ([upgrading.md](upgrading.md#following-main)). That's why
-  the updates that can migrate data wait for the maintainer, who takes a backup before merging them.
+  ones included, reaches it within about two minutes ([upgrading.md](upgrading.md#following-main)). Dependabot's
+  major updates, which can migrate data, therefore deploy unattended with the nightly backup behind them; the
+  changes merged by hand (the Minecraft server's version, the qBittorrent upgrade) get a backup first.
 - **Dependency review** blocks a pull request that adds or changes a Python or Actions dependency with a known
   vulnerability of moderate severity or higher, or a license outside the allowlist.
 - **Nothing on the host updates from a registry.** Auto-updaters such as Watchtower are not used: they would run
