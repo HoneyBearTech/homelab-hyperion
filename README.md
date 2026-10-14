@@ -46,7 +46,9 @@ Docker Compose stack for Hyperion, a homelab Ubuntu server (24.04, amd64). Versi
 
 Every service has a health check, and every image is pinned by tag **and** digest, for `linux/amd64`. The
 Minecraft server's own version is pinned in `compose.yaml` too, never `LATEST`. New versions arrive as Dependabot
-pull requests that CI checks and the maintainer merges; nothing on the host updates itself.
+pull requests that CI checks before they're merged. The maintainer's server follows `main`: a pull agent there
+applies each merge within a couple of minutes ([upgrading](docs/upgrading.md#following-main)). Nothing updates from a
+registry tag by itself: what runs is always a commit in `main`.
 
 ## Getting started
 
@@ -71,7 +73,8 @@ make check                        # policy check: every image pinned, nothing pr
 scripts/backup.sh                 # back up every service's data (stops each briefly), never the downloads
 ```
 
-Upgrading to a new release: [docs/upgrading.md](docs/upgrading.md).
+Upgrading to a new release, or following `main` the way the maintainer's server does:
+[docs/upgrading.md](docs/upgrading.md).
 
 ## Configuration
 
@@ -110,7 +113,8 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
   ports (TCP 19132, UDP 19140–19149) to the internet if you mean to host players from outside your LAN.
 - Secrets (logins, indexer API keys, webhook URLs) live only in each service's data or its own gitignored
   `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host.
-- Don't run an auto-updater such as Watchtower on these containers; upgrade by release instead.
+- Don't run an auto-updater such as Watchtower on these containers; upgrade from this repository instead (a
+  release, or `main`).
 - Every service drops every Linux capability, adds back only the ones its image needs, and can't gain new
   privileges; where its image allows it, its root filesystem is read-only. The policy check refuses privileged containers, capabilities beyond Docker's defaults, host
   networking, device mappings and Docker socket mounts unless a service documents why
