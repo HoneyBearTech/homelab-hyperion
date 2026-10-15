@@ -13,9 +13,10 @@ APPS = {
     "dozzle": "/data",
     "minecraft": "/data",
 }
-# Mounts that aren't app data: the downloads (never backed up) and the Docker socket.
+# Mounts that aren't app data: the downloads, finished and incomplete (never backed up), and the Docker socket.
 OTHER_MOUNTS = {
     "${DOWNLOADS_PATH:?set DOWNLOADS_PATH in .env}:/downloads",
+    "${INCOMPLETE_PATH:?set INCOMPLETE_PATH in .env}:/incomplete",
     "/var/run/docker.sock:/var/run/docker.sock:ro",
 }
 

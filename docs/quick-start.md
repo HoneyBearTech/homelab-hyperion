@@ -19,10 +19,10 @@ user in the `docker` group, and the host ports the services use free ([installin
    cp .env.example .env && chmod 600 .env
    ```
 
-   In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directory), `DOWNLOADS_PATH`,
-   `CONFIG_ROOT` (the directory that holds each app's folder, `<app>/config`, with its settings and data),
-   `MINECRAFT_LEVEL_NAME` (the world's name), `MINECRAFT_ADDRESS` (this host's LAN address, for the players), and
-   `MINECRAFT_EULA=TRUE` once you've read and accepted the [Minecraft EULA](https://www.minecraft.net/eula). Never
+   In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directories), `DOWNLOADS_PATH`,
+   `INCOMPLETE_PATH` (qBittorrent's torrents still downloading), `CONFIG_ROOT` (the directory that holds each app's
+   folder, `<app>/config`, with its settings and data), `MINECRAFT_LEVEL_NAME` (the world's name),
+   `MINECRAFT_ADDRESS` (this host's LAN address, for the players), and `MINECRAFT_EULA=TRUE` once you've read and accepted the [Minecraft EULA](https://www.minecraft.net/eula). Never
    point a path into `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). Every setting is
    described in [interfaces.md](interfaces.md#settings).
 
@@ -33,7 +33,7 @@ user in the `docker` group, and the host ports the services use free ([installin
    is the exception: Dozzle runs as root, so Docker creates `CONFIG_ROOT/dozzle/config` for it on the first start.
 
    ```sh
-   . ./.env && mkdir -p "$DOWNLOADS_PATH"
+   . ./.env && mkdir -p "$DOWNLOADS_PATH" "$INCOMPLETE_PATH"
    for app in prowlarr qbittorrent heimdall minecraft; do
      mkdir -p "$CONFIG_ROOT/$app/config"
    done

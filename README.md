@@ -57,7 +57,7 @@ On a Docker host ([requirements](docs/installing.md#requirements)):
 ```sh
 git clone https://github.com/HoneyBearTech/homelab-hyperion.git && cd homelab-hyperion
 cp .env.example .env && chmod 600 .env              # then set TZ, PUID/PGID, the paths and the Minecraft settings
-. ./.env && mkdir -p "$DOWNLOADS_PATH"
+. ./.env && mkdir -p "$DOWNLOADS_PATH" "$INCOMPLETE_PATH"
 for app in prowlarr qbittorrent heimdall minecraft; do mkdir -p "$CONFIG_ROOT/$app/config"; done
 docker compose up -d --wait
 ```
@@ -85,9 +85,10 @@ autoheal's optional restart webhook, goes in the gitignored `autoheal.env` (temp
 | Setting | Default in `.env.example` | Meaning |
 | --- | --- | --- |
 | `TZ` | `Etc/UTC` | Time zone |
-| `PUID`, `PGID` | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads directory |
+| `PUID`, `PGID` | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads and incomplete directories |
 | `CONFIG_ROOT` | `/srv/config` | Each app's folder, `<app>/config`: its settings and database (Minecraft's worlds). Holds every login: back it up. Never a path inside `/var/lib/docker/volumes` ([why](docs/installing.md#where-data-lives)) |
 | `DOWNLOADS_PATH` | `/srv/downloads` | Where qBittorrent saves downloads (never backed up by this stack) |
+| `INCOMPLETE_PATH` | `/srv/incomplete` | Where qBittorrent keeps torrents still downloading, at `/incomplete` (never backed up) |
 | `DOZZLE_REMOTE_AGENT` | *(empty)* | Dozzle agents on other hosts (`host:port`, comma-separated) whose logs Dozzle also shows |
 | `MINECRAFT_LEVEL_NAME` | `Bedrock level` | The world the server opens: its folder under `worlds/` |
 | `MINECRAFT_ADDRESS` | `192.0.2.10` | The address players reach this host at, handed to them with their gameplay port |
