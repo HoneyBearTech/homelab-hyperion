@@ -76,8 +76,9 @@ services:
     restart: unless-stopped
     labels:
       autoheal: "true"
-      # The downloads are transient and large; the apps that import them keep their own copies.
-      org.honeybeartech.hyperion.backup.skip: "/downloads"
+      # The downloads (finished and incomplete) are transient and large; the apps that import them keep their own
+      # copies.
+      org.honeybeartech.hyperion.backup.skip: "/downloads,/incomplete"
     healthcheck:
       <<: *healthcheck
       # The web UI's login page answers without a login.
@@ -93,6 +94,9 @@ services:
     volumes:
       - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/qbittorrent/config:/config
       - ${DOWNLOADS_PATH:?set DOWNLOADS_PATH in .env}:/downloads
+      # Torrents still downloading ("Keep incomplete torrents in" = /incomplete). Every path set in qBittorrent must
+      # be under /downloads or /incomplete: anything else is lost when the container is recreated.
+      - ${INCOMPLETE_PATH:?set INCOMPLETE_PATH in .env}:/incomplete
 
   # --- Start page and logs --------------------------------------------------------------------------------------
   heimdall:

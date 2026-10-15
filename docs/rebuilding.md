@@ -23,8 +23,8 @@ Give the machine the same address the old one had (or update everything that rea
 apps' download client and indexer settings, reverse proxy hosts, monitoring, any router port forwards for
 qBittorrent or Minecraft).
 
-If the downloads directory is a network share, mount it at the same host path as before (`DOWNLOADS_PATH` in the
-backup's `.env`).
+If the downloads or incomplete directory is a network share, mount it at the same host path as before
+(`DOWNLOADS_PATH` and `INCOMPLETE_PATH` in the backup's `.env`).
 
 ## 2. Docker
 

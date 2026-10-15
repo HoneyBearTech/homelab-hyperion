@@ -61,7 +61,7 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   scan scans `linux/amd64`.
 - **Downloads are never backed up, restored or deleted by this repo's scripts.** A service lists such paths in
   its `org.honeybeartech.hyperion.backup.skip` label (comma-separated container paths); `backup.sh` skips them,
-  `restore.sh` refuses to write them, and the smoke test checks both. qBittorrent's must list `/downloads`.
+  `restore.sh` refuses to write them, and the smoke test checks both. qBittorrent's must list `/downloads` and `/incomplete`.
   Paths inside a mount that a service's `org.honeybeartech.hyperion.backup.exclude` label lists are left out of
   its archive and left in place by a restore (no service uses it yet); a mount inside another mount is archived
   on its own. Each backup also writes `NETWORKS` and `VERSION`. Keep it that way when adding a service.
@@ -91,7 +91,7 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   database live in `${CONFIG_ROOT:?set CONFIG_ROOT in .env}/<app>/config`, mounted at the app's data path; any other
   per-app host folder sits beside it as `${CONFIG_ROOT}/<app>/<purpose>` (cache, logs, scripts…). `<app>` is the
   lowercase service name. No per-app path settings, no named Docker volumes for app data (`tests/test_settings.py`).
-  Downloads stay on `DOWNLOADS_PATH`. Dozzle's folder is owned by root (it runs as root, no capabilities); the
+  Downloads stay on `DOWNLOADS_PATH` (incomplete torrents on `INCOMPLETE_PATH`). Dozzle's folder is owned by root (it runs as root, no capabilities); the
   others by `PUID:PGID`.
 - **Never point a path setting into `/var/lib/docker/volumes`, and never keep app data in named Docker volumes.**
   `docker volume prune`, `docker system prune --volumes` and Portainer's "remove unused volumes" delete every volume

@@ -27,6 +27,7 @@ yet).
 | Prowlarr's database and settings | `CONFIG_ROOT/prowlarr/config` | `/config` |
 | qBittorrent's settings and torrent list | `CONFIG_ROOT/qbittorrent/config` | `/config` |
 | qBittorrent's downloads | `DOWNLOADS_PATH` | `/downloads` |
+| qBittorrent's incomplete torrents | `INCOMPLETE_PATH` | `/incomplete` |
 | Heimdall's database and settings | `CONFIG_ROOT/heimdall/config` | `/config` |
 | The Minecraft server's worlds and settings | `CONFIG_ROOT/minecraft/config` | `/data` |
 | Dozzle's settings (saved in its UI) | `CONFIG_ROOT/dozzle/config` | `/data` |
@@ -35,7 +36,7 @@ The container paths are fixed in `compose.yaml` ([interfaces.md](interfaces.md#v
 folders must be owned by `PUID`:`PGID`, except Dozzle's: Dozzle runs as root, so leave its folder for Docker to
 create (owned by root) on the first start. autoheal and the socket proxy keep no data.
 
-> **Warning: keep app data out of Docker volumes.** Never point `CONFIG_ROOT`, `DOWNLOADS_PATH` or any other path
+> **Warning: keep app data out of Docker volumes.** Never point `CONFIG_ROOT`, `DOWNLOADS_PATH`, `INCOMPLETE_PATH` or any other path
 > setting into `/var/lib/docker/volumes`, and don't keep app data in named Docker volumes. `docker volume prune`,
 > `docker system prune --volumes` and Portainer's "remove unused volumes" delete every volume that no container
 > mounts *as a volume*, and that includes a volume whose `_data` folder a service bind-mounts by its path: Docker

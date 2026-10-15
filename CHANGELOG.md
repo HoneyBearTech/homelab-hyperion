@@ -8,6 +8,9 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Upgrading
 
+- **Add `INCOMPLETE_PATH` to `.env` before this is deployed** (required; see `.env.example`): the host directory
+  qBittorrent keeps torrents in while they download, mounted at `/incomplete`. It must exist and be writable by
+  `PUID:PGID`. A deploy without it stops at `docker compose config` and changes nothing.
 - **Move each app's data into its folder under `CONFIG_ROOT` before this is deployed, then add `CONFIG_ROOT` to
   `.env`** (required; see `.env.example`). A deploy without `CONFIG_ROOT` stops at `docker compose config` and
   changes nothing, so the old containers keep running until then (a server's pull agent tries again on its next
@@ -37,6 +40,11 @@ All notable changes to homelab-hyperion are documented here. The format follows
   folder. Never put `CONFIG_ROOT` inside `/var/lib/docker/volumes`.
 - Backups taken before this restore as they are: `scripts/restore.sh` puts each archive into the app's folder under
   `CONFIG_ROOT`.
+
+### Added
+
+- qBittorrent mounts `INCOMPLETE_PATH` at `/incomplete` for torrents still downloading ("Keep incomplete torrents
+  in"). Like `/downloads`, it is in qBittorrent's `backup.skip` label: never backed up, never written by a restore.
 
 ### Changed
 

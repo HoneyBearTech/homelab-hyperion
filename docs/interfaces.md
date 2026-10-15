@@ -13,9 +13,10 @@ setting marked required stops `docker compose` with an error naming it when it's
 | Setting | Required | Example | Meaning |
 | --- | --- | --- | --- |
 | `TZ` | yes | `Etc/UTC` | Time zone (tz database name) for logs and schedules. |
-| `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads directory. |
+| `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads and incomplete directories. |
 | `CONFIG_ROOT` | yes | `/srv/config` | Host directory with each app's folder: `<app>/config` holds its settings and database (Minecraft's worlds), for `prowlarr`, `qbittorrent`, `heimdall`, `minecraft` and `dozzle`, mounted at the app's data path ([below](#volumes-and-mounts)). Owned by `PUID:PGID`, except `dozzle/config`, owned by root. Holds Prowlarr's indexer credentials and every login: back it up. Never a path inside `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). |
 | `DOWNLOADS_PATH` | yes | `/srv/downloads` | Where qBittorrent saves downloads. Never backed up by this stack. |
+| `INCOMPLETE_PATH` | yes | `/srv/incomplete` | Where qBittorrent keeps torrents still downloading, mounted at `/incomplete`. Never backed up by this stack. |
 | `DOZZLE_REMOTE_AGENT` | no | `agent-one.example.com:7007` | Dozzle agents on other hosts (`host:port`, comma-separated) whose containers Dozzle also shows. Empty: this host only. |
 | `MINECRAFT_LEVEL_NAME` | yes | `Bedrock level` | The world the server opens: the name of its folder under `worlds/` in `CONFIG_ROOT/minecraft/config`. A new installation starts a new world with this name. |
 | `MINECRAFT_ADDRESS` | yes | `192.0.2.10` | The address players reach this host at (an IP literal, not a hostname). The server hands it to each client with its gameplay port. |
@@ -83,6 +84,7 @@ in the middle of a database migration or while the Minecraft image downloads its
 | `/config` | `CONFIG_ROOT/prowlarr/config` | Prowlarr: database and settings |
 | `/config` | `CONFIG_ROOT/qbittorrent/config` | qBittorrent: settings and torrent list |
 | `/downloads` | `DOWNLOADS_PATH` | qBittorrent: downloads (read-write; never backed up) |
+| `/incomplete` | `INCOMPLETE_PATH` | qBittorrent: torrents still downloading (read-write; never backed up) |
 | `/config` | `CONFIG_ROOT/heimdall/config` | Heimdall: database and settings |
 | `/data` | `CONFIG_ROOT/minecraft/config` | Minecraft server: worlds, `server.properties`, allowlist and permissions |
 | `/data` | `CONFIG_ROOT/dozzle/config` | Dozzle: settings saved in its UI |
@@ -97,7 +99,7 @@ published; autoheal also joins the default network, to reach its webhook.
 | --- | --- |
 | `autoheal` | `"true"` on every service autoheal may restart when its health check fails (every service but autoheal). |
 | `org.honeybeartech.hyperion.allow.<rule>` | Lets one service break one policy rule; the value is the reason, and must not be empty. Rules: `image`, `digest`, `latest`, `build`, `privileged`, `no-new-privileges`, `cap-drop`, `cap-add`, `host-network`, `host-pid`, `docker-socket`, `devices`, `healthcheck` ([security.md](security.md#policy)). In use: `docker-socket` for Dozzle and the socket proxy, `latest` for autoheal (its maintained image is only published as `latest`, pinned by digest). |
-| `org.honeybeartech.hyperion.backup.skip` | Container paths (comma-separated, exact) that `scripts/backup.sh` never archives and `scripts/restore.sh` refuses to write, even if a backup lists them. In use: qBittorrent's `/downloads`. |
+| `org.honeybeartech.hyperion.backup.skip` | Container paths (comma-separated, exact) that `scripts/backup.sh` never archives and `scripts/restore.sh` refuses to write, even if a backup lists them. In use: qBittorrent's `/downloads` and `/incomplete`. |
 | `org.honeybeartech.hyperion.backup.exclude` | Paths inside a service's data mounts (comma-separated, exact container paths, at any depth) that `scripts/backup.sh` leaves out of the mount's archive and `scripts/restore.sh` leaves in place. A path that isn't inside one of the service's data mounts, or contains `..` or a pattern character (`*?[\`), makes both fail before anything stops. Not in use. |
 
 ## Commands
