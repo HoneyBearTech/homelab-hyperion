@@ -57,8 +57,9 @@ Dozzle ──agent protocol──▶ Dozzle agents on other hosts (optional)
 autoheal ──filtered API──▶ socket proxy ──▶ Docker socket
 ```
 
-Each service keeps its settings and database in its own data directory (see
-[interfaces.md](interfaces.md#volumes-and-mounts)), which is what `scripts/backup.sh` archives. The downloads
+Each service keeps its settings and database in its own folder on the host, `CONFIG_ROOT/<app>/config` (see
+[interfaces.md](interfaces.md#volumes-and-mounts)), which is what `scripts/backup.sh` archives; no app data is in a
+Docker volume. The downloads
 directory is never archived.
 
 ## How changes reach the host

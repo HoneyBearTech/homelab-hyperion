@@ -17,17 +17,30 @@ The [quick start](quick-start.md) is the short version of this page.
 
 ## Where data lives
 
+Every app keeps its settings and data in its own folder under one directory you choose, `CONFIG_ROOT` (for
+example `/srv/config`, or a folder in your home directory): `CONFIG_ROOT/<app>/config`, where `<app>` is the
+service's name. Anything else an app keeps on the host goes beside it, as `CONFIG_ROOT/<app>/<purpose>` (none does
+yet).
+
 | What | Where on the host | In the container |
 | --- | --- | --- |
-| Prowlarr's database and settings | `PROWLARR_CONFIG_PATH` | `/config` |
-| qBittorrent's settings and torrent list | `QBITTORRENT_CONFIG_PATH` | `/config` |
+| Prowlarr's database and settings | `CONFIG_ROOT/prowlarr/config` | `/config` |
+| qBittorrent's settings and torrent list | `CONFIG_ROOT/qbittorrent/config` | `/config` |
 | qBittorrent's downloads | `DOWNLOADS_PATH` | `/downloads` |
-| Heimdall's database and settings | `HEIMDALL_CONFIG_PATH` | `/config` |
-| The Minecraft server's worlds and settings | `MINECRAFT_DATA_PATH` | `/data` |
+| Heimdall's database and settings | `CONFIG_ROOT/heimdall/config` | `/config` |
+| The Minecraft server's worlds and settings | `CONFIG_ROOT/minecraft/config` | `/data` |
+| Dozzle's settings (saved in its UI) | `CONFIG_ROOT/dozzle/config` | `/data` |
 
-The container paths are fixed in `compose.yaml` ([interfaces.md](interfaces.md#volumes-and-mounts)); the host
-paths are yours to choose. Each data directory must be owned by `PUID`:`PGID`. Dozzle, autoheal and the socket
-proxy keep no data.
+The container paths are fixed in `compose.yaml` ([interfaces.md](interfaces.md#volumes-and-mounts)). The apps'
+folders must be owned by `PUID`:`PGID`, except Dozzle's: Dozzle runs as root, so leave its folder for Docker to
+create (owned by root) on the first start. autoheal and the socket proxy keep no data.
+
+> **Warning: keep app data out of Docker volumes.** Never point `CONFIG_ROOT`, `DOWNLOADS_PATH` or any other path
+> setting into `/var/lib/docker/volumes`, and don't keep app data in named Docker volumes. `docker volume prune`,
+> `docker system prune --volumes` and Portainer's "remove unused volumes" delete every volume that no container
+> mounts *as a volume*, and that includes a volume whose `_data` folder a service bind-mounts by its path: Docker
+> counts it as unused, and the app's data is gone. Keep the data under `CONFIG_ROOT`, which no prune touches, and
+> back it up ([below](#scheduled-backups)).
 
 ## Installing
 
@@ -35,17 +48,19 @@ proxy keep no data.
    [verifying-releases.md](verifying-releases.md)).
 2. Create `.env` from `.env.example` (mode `600`) and set every value, including `MINECRAFT_EULA=TRUE`.
    Optionally create `autoheal.env` from `autoheal.env.example` (mode `600`) for restart notices.
-3. Create the data directories, then `docker compose up -d --wait`.
+3. Create the apps' folders as the `PUID`:`PGID` user (all but Dozzle's,
+   [quick start](quick-start.md)), then `docker compose up -d --wait`.
 
 **Adopting existing containers.** If the services already run on the host (from Portainer stacks or another
-Compose project), point the stack at their existing data instead of starting empty: stop the old containers,
-set each path in `.env` to where its data already is, and keep the same published ports and the **same
-container path for the downloads**: qBittorrent records every torrent's save path, and the media apps map that
-path to their own view of the files, so a different mount point breaks both. Take a backup of the old data
-first. Run the same Minecraft server version as before (or newer): a world opened by a newer server can't go
-back to an older one. Set `MINECRAFT_LEVEL_NAME` to the existing world's folder name (otherwise the server
-starts a new, empty world), make the Minecraft data directory owned by `PUID`:`PGID` (the server runs as that
-user, not as root), and check that `allowlist.json` names the players.
+Compose project), move their existing data into the apps' folders instead of starting empty: stop the old
+containers, take a backup of the old data, and move or copy each one's data into `CONFIG_ROOT/<app>/config`
+(`docker inspect --format '{{json .Mounts}}' <container>` shows what it mounts where). Copy with `cp -a` (as root
+for data in a Docker volume) so the owners stay the same. Keep the same published ports and the **same container
+path for the downloads**: qBittorrent records every torrent's save path, and the media apps map that path to their
+own view of the files, so a different mount point breaks both. Run the same Minecraft server version as before (or
+newer): a world opened by a newer server can't go back to an older one. Set `MINECRAFT_LEVEL_NAME` to the existing
+world's folder name (otherwise the server starts a new, empty world), make `CONFIG_ROOT/minecraft/config` owned by
+`PUID`:`PGID` (the server runs as that user, not as root), and check that `allowlist.json` names the players.
 
 The maintainer's server runs `main` rather than a release, and deploys every merge by itself
 ([upgrading.md](upgrading.md#following-main)). For your own setup, a release is the safer choice.
@@ -69,7 +84,7 @@ The maintainer's server runs `main` rather than a release, and deploys every mer
   on, so only the players you name can join.
 - Keep `.env` at mode `600`; it holds no secrets by design, but it describes your host. `autoheal.env` holds a
   secret (anyone with the webhook URL can post to the channel): mode `600`, never committed.
-- Back up the services' data directories ([upgrading.md](upgrading.md#backing-up)), and schedule a nightly copy
+- Back up the apps' folders under `CONFIG_ROOT` ([upgrading.md](upgrading.md#backing-up)), and schedule a nightly copy
   off the host ([below](#scheduled-backups)).
 - Don't add services that mount the Docker socket, run privileged or use the host network without a documented
   reason; the policy check refuses them ([security.md](security.md)).
@@ -147,5 +162,5 @@ systemctl --user disable --now homelab-hyperion-backup.timer   # if you schedule
 docker compose down          # stops and removes the containers and the stack's networks
 ```
 
-The data directories and the downloads are left untouched. Remove the data directories by hand if you no
-longer want the services' data.
+The apps' folders under `CONFIG_ROOT` and the downloads are left untouched. Remove them by hand if you no longer
+want the services' data.

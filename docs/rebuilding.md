@@ -53,7 +53,10 @@ The backup's `VERSION` names the release (or commit) the old host ran; backups m
 have one, so check the release notes instead.
 
 Copy any `<service>.env` from the backup's `env/` the same way (mode `600`). Edit `.env` if the new host's
-paths differ (but keep the downloads' container path), create the data directories as your user, then:
+paths differ (but keep the downloads' container path). A backup taken before the apps' data moved under
+`CONFIG_ROOT` has an `.env` without it: add `CONFIG_ROOT` (see `.env.example`) and drop the old per-app path
+settings; the restore puts each archive into the app's folder under `CONFIG_ROOT` all the same. Create the apps'
+folders as your user (all but Dozzle's, as in the [quick start](quick-start.md)), then:
 
 ```sh
 docker compose config --quiet && docker compose pull

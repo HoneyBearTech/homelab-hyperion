@@ -40,12 +40,14 @@ the checker's unit tests with a coverage floor, `docker compose config` and the 
 ([`scripts/check_compose.py`](scripts/check_compose.py)). "Stack smoke test"
 ([`scripts/smoke-test.sh`](scripts/smoke-test.sh)), on an amd64 runner like the server, pulls the pinned
 images (logged in to Docker Hub with the project's read-only token when it's set, and logged out again before
-anything starts), starts every service with throwaway directories (owned by `PUID`:`PGID`, mode 0755, as on
-the host) and volumes, fails unless each one reports healthy within five minutes, runs a backup and restore round trip over every data mount, checks that mounts and
-paths excluded from backups (the downloads directory) are neither archived nor overwritten and that the backup
-records `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the copy
-and the pruning, and checks that autoheal restarts a container that turns unhealthy. CodeQL, dependency review,
-a DCO check and OpenSSF Scorecard also run on the repository.
+anything starts), starts every service with throwaway directories and app folders under a throwaway `CONFIG_ROOT`
+(owned by `PUID`:`PGID`, mode 0755, as on the host; Dozzle's by root), fails unless each one reports healthy within
+five minutes, runs a backup and restore round trip over every data mount (one app's folder removed first, behind a
+container made from older settings, to check that the restore recreates it where `compose.yaml` says), checks that
+mounts and paths excluded from backups (the downloads directory) are neither archived nor overwritten and that the
+backup records `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the
+copy and the pruning, and checks that autoheal restarts a container that turns unhealthy. CodeQL, dependency
+review, a DCO check and OpenSSF Scorecard also run on the repository.
 
 The maintainer also keeps a copy on a self-hosted GitLab, mirrored from GitHub by a scheduled job in
 [`.gitlab-ci.yml`](.gitlab-ci.yml), which re-runs the "Checks + tests" steps that need no Docker daemon on
