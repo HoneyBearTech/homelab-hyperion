@@ -2,6 +2,8 @@
 # one secret, autoheal's optional webhook, from autoheal.env (template: autoheal.env.example).
 # Every image is pinned as name:tag@sha256:<digest>; Dependabot proposes updates (patch, minor and major ones merge
 # automatically once CI passes). scripts/check_compose.py enforces the policy (docs/security.md#policy).
+# Each app's settings and data live in its own host folder, CONFIG_ROOT/<app>/config, and nowhere else: no named
+# volumes, and no path into /var/lib/docker/volumes, which a volume prune deletes (docs/installing.md#where-data-lives).
 
 name: homelab-hyperion
 
@@ -54,7 +56,7 @@ services:
     ports:
       - "9696:9696"
     volumes:
-      - ${PROWLARR_CONFIG_PATH:?set PROWLARR_CONFIG_PATH in .env}:/config
+      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/prowlarr/config:/config
 
   qbittorrent:
     <<: *hardened
@@ -89,7 +91,7 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - ${QBITTORRENT_CONFIG_PATH:?set QBITTORRENT_CONFIG_PATH in .env}:/config
+      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/qbittorrent/config:/config
       - ${DOWNLOADS_PATH:?set DOWNLOADS_PATH in .env}:/downloads
 
   # --- Start page and logs --------------------------------------------------------------------------------------
@@ -125,15 +127,16 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ${HEIMDALL_CONFIG_PATH:?set HEIMDALL_CONFIG_PATH in .env}:/config
+      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/heimdall/config:/config
 
   dozzle:
     <<: *hardened
     image: amir20/dozzle:v11.3.2@sha256:0d8cf9702f422d65a7e8ad238785dc6b05b2b9c43c945f6bbdf3358ad5da5f6c
     container_name: dozzle
     restart: unless-stopped
-    # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, a named
-    # volume: Docker creates it owned by root, the user Dozzle runs as, so it writes there with no capabilities.
+    # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, its folder
+    # under CONFIG_ROOT: Docker creates it owned by root, the user Dozzle runs as, so it writes there with no
+    # capabilities.
     read_only: true
     tmpfs:
       - /tmp
@@ -151,7 +154,7 @@ services:
     ports:
       - "4040:8080"
     volumes:
-      - dozzle-data:/data
+      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/dozzle/config:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # --- Games ----------------------------------------------------------------------------------------------------
@@ -201,7 +204,7 @@ services:
       - "19132:19132/tcp"
       - "19140-19149:19140-19149/udp"
     volumes:
-      - ${MINECRAFT_DATA_PATH:?set MINECRAFT_DATA_PATH in .env}:/data
+      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/minecraft/config:/data
 
   # --- Operations -----------------------------------------------------------------------------------------------
   # Restarts any container labelled autoheal: "true" that Docker reports unhealthy (Docker itself only restarts a
@@ -281,7 +284,3 @@ services:
 networks:
   docker-proxy:
     internal: true
-
-# Dozzle's settings. Compose names it <project>_dozzle-data; the backup archives it like the data directories.
-volumes:
-  dozzle-data:

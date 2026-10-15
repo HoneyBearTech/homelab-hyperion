@@ -6,7 +6,51 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ## [Unreleased]
 
+### Upgrading
+
+- **Move each app's data into its folder under `CONFIG_ROOT` before this is deployed, then add `CONFIG_ROOT` to
+  `.env`** (required; see `.env.example`). A deploy without `CONFIG_ROOT` stops at `docker compose config` and
+  changes nothing, so the old containers keep running until then (a server's pull agent tries again on its next
+  run). With the stack stopped (`docker compose stop`), move or copy:
+
+  | App | Before | Now |
+  | --- | --- | --- |
+  | prowlarr | the `PROWLARR_CONFIG_PATH` folder | `CONFIG_ROOT/prowlarr/config`, owned by `PUID:PGID` |
+  | qbittorrent | the `QBITTORRENT_CONFIG_PATH` folder | `CONFIG_ROOT/qbittorrent/config`, owned by `PUID:PGID` |
+  | heimdall | the `HEIMDALL_CONFIG_PATH` folder | `CONFIG_ROOT/heimdall/config`, owned by `PUID:PGID` |
+  | minecraft | the `MINECRAFT_DATA_PATH` folder | `CONFIG_ROOT/minecraft/config`, owned by `PUID:PGID` |
+  | dozzle | the `dozzle-data` volume (`homelab-hyperion_dozzle-data` by default) | `CONFIG_ROOT/dozzle/config`, owned by root |
+
+  For example, with `CONFIG_ROOT` set in your shell:
+
+  ```sh
+  . ./.env && docker compose stop
+  mkdir -p "$CONFIG_ROOT/prowlarr" && mv "$PROWLARR_CONFIG_PATH" "$CONFIG_ROOT/prowlarr/config"
+  # ... the same for qbittorrent, heimdall and minecraft (sudo cp -a instead of mv across filesystems)
+  docker run --rm --network none -v homelab-hyperion_dozzle-data:/from:ro -v "$CONFIG_ROOT/dozzle/config:/to" \
+    busybox cp -a /from/. /to/
+  ```
+
+  `mv` and `cp -a` keep the files' owners. Then add `CONFIG_ROOT` to `.env`, drop `PROWLARR_CONFIG_PATH`,
+  `QBITTORRENT_CONFIG_PATH`, `HEIMDALL_CONFIG_PATH` and `MINECRAFT_DATA_PATH` (no longer read), and deploy
+  (`docker compose up -d --wait`). Remove the old Dozzle volume (`docker volume rm`) once Dozzle runs from its
+  folder. Never put `CONFIG_ROOT` inside `/var/lib/docker/volumes`.
+- Backups taken before this restore as they are: `scripts/restore.sh` puts each archive into the app's folder under
+  `CONFIG_ROOT`.
+
 ### Changed
+
+- Each app's settings and data move to one place on the host: `CONFIG_ROOT/<app>/config`, mounted at the same
+  container path as before (`/config`; `/data` for Minecraft and Dozzle), the layout every homelab stack now uses
+  (the maintainer's decision, 2026-10-15). The new required setting `CONFIG_ROOT` replaces `PROWLARR_CONFIG_PATH`,
+  `QBITTORRENT_CONFIG_PATH`, `HEIMDALL_CONFIG_PATH` and `MINECRAFT_DATA_PATH`, and Dozzle's settings leave the named
+  volume `dozzle-data`: `compose.yaml` declares no volumes any more. `DOWNLOADS_PATH` is unchanged.
+  `scripts/restore.sh` writes each archive to what the service mounts at that container path now, creating a missing
+  folder and recreating a container that predates `compose.yaml`, so older backups restore into the new folders.
+- Docs: a warning never to point a path setting into `/var/lib/docker/volumes` or keep app data in named volumes:
+  `docker volume prune`, `docker system prune --volumes` and Portainer's "remove unused volumes" delete any volume
+  that no container mounts as a volume, even one whose `_data` folder a service bind-mounts
+  ([docs/installing.md](docs/installing.md#where-data-lives)).
 
 - Docs: the maintainer's server now follows `main` with a pull agent instead of running a release tag, so a merge
   deploys within about two minutes, Dependabot's automatic merges included. Rollback is a revert pull request; a

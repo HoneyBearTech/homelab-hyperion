@@ -32,15 +32,15 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - No hostnames, IP addresses, internal or public domains, host paths, NFS exports, Portainer stack names,
   Minecraft world or gamer names, or personal email addresses in anything committed: code, compose, docs,
   examples, tests, commit messages. Host facts live only in the Chronos notes. Examples use placeholders
-  (`/srv/appdata`, `/srv/downloads`, `example.com`, `homelab-hyperion_`).
+  (`/srv/config`, `/srv/downloads`, `example.com`, `homelab-hyperion_`).
 - Commit as `31805425+HoneyBearTech@users.noreply.github.com` (set as this repo's `user.email`), with
   `git commit -s` for the DCO sign-off; commits and tags are SSH-signed.
 - No secrets: the services' logins, Prowlarr's indexer credentials and API keys, qBittorrent's web UI password,
-  and any autoheal webhook URL stay in their data on the host (or a gitignored `<service>.env`), never in
-  `compose.yaml`, `.env` or the `*.example` files. A secret a service can only take from its environment gets its
-  own gitignored `<service>.env` (`env_file`) with a committed `<service>.env.example`. `.gitignore` covers
-  `.env`, keys, certificates, `appdata/`, `data/`, `media/`, `downloads/`, `backups/`; extend it rather than work
-  around it.
+  and any autoheal webhook URL stay in their folders under `CONFIG_ROOT` on the host (or a gitignored
+  `<service>.env`), never in `compose.yaml`, `.env` or the `*.example` files. A secret a service can only take from
+  its environment gets its own gitignored `<service>.env` (`env_file`) with a committed `<service>.env.example`.
+  `.gitignore` covers `.env`, keys, certificates, `appdata/`, `data/`, `media/`, `downloads/`, `backups/`; extend it
+  rather than work around it.
 - Keep the repo on track for OpenSSF Baseline Levels 1 and 2 and the Best Practices Passing and Silver
   badges (project 15292). If a change would break a met criterion (for example unpinning an image or an
   Action, adding a workflow without `permissions:`, or dropping the coverage floor), say so before making it.
@@ -85,7 +85,19 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   `docker compose up`, no edits to service data, qBittorrent torrents, Prowlarr indexers, Minecraft worlds, or
   Portainer stacks. Read-only inspection (`docker ps`, `docker inspect`) only when asked.
 - Every setting goes through `.env` (`${VAR:?…}` in compose when required) and is listed in `.env.example`
-  and `docs/interfaces.md`.
+  and `docs/interfaces.md` (`tests/test_settings.py` checks both).
+- **App data layout (owner's decision 2026-10-15, the same in all five homelab stacks):** one required setting,
+  `CONFIG_ROOT` (example `/srv/config`; the owner's hosts use their home directory). Each app's settings and
+  database live in `${CONFIG_ROOT:?set CONFIG_ROOT in .env}/<app>/config`, mounted at the app's data path; any other
+  per-app host folder sits beside it as `${CONFIG_ROOT}/<app>/<purpose>` (cache, logs, scripts…). `<app>` is the
+  lowercase service name. No per-app path settings, no named Docker volumes for app data (`tests/test_settings.py`).
+  Downloads stay on `DOWNLOADS_PATH`. Dozzle's folder is owned by root (it runs as root, no capabilities); the
+  others by `PUID:PGID`.
+- **Never point a path setting into `/var/lib/docker/volumes`, and never keep app data in named Docker volumes.**
+  `docker volume prune`, `docker system prune --volumes` and Portainer's "remove unused volumes" delete every volume
+  no container mounts *as a volume*, including one whose `_data` folder a service bind-mounts by path: that is how a
+  prune deleted two apps' data in this homelab (2026-10-15). Keep app data under `CONFIG_ROOT`; the warning is in
+  `docs/installing.md#where-data-lives`, and it stays there.
 - **Container paths and ports are load-bearing**: Sonarr, Radarr and Lidarr on another host reach Prowlarr and
   qBittorrent by their published ports, qBittorrent's saved torrents record their download paths, and players
   reach the Minecraft server on TCP 19132 and UDP 19140–19149 (NetherNet). Adopt the existing data and keep

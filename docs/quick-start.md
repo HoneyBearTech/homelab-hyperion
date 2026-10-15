@@ -19,20 +19,24 @@ user in the `docker` group, and the host ports the services use free ([installin
    cp .env.example .env && chmod 600 .env
    ```
 
-   In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directory), `DOWNLOADS_PATH`, the
-   data paths, `MINECRAFT_LEVEL_NAME` (the world's name), `MINECRAFT_ADDRESS` (this host's LAN address, for the
-   players), and `MINECRAFT_EULA=TRUE` once you've read and
-   accepted the [Minecraft EULA](https://www.minecraft.net/eula). Every setting is described in
-   [interfaces.md](interfaces.md#settings).
+   In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directory), `DOWNLOADS_PATH`,
+   `CONFIG_ROOT` (the directory that holds each app's folder, `<app>/config`, with its settings and data),
+   `MINECRAFT_LEVEL_NAME` (the world's name), `MINECRAFT_ADDRESS` (this host's LAN address, for the players), and
+   `MINECRAFT_EULA=TRUE` once you've read and accepted the [Minecraft EULA](https://www.minecraft.net/eula). Never
+   point a path into `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). Every setting is
+   described in [interfaces.md](interfaces.md#settings).
 
    Optionally, for a notice each time autoheal restarts a container, put a webhook URL in `autoheal.env`
    (`cp autoheal.env.example autoheal.env && chmod 600 autoheal.env`).
 
-3. **Create the data directories** as the `PUID`/`PGID` user, so Docker doesn't create them owned by root:
+3. **Create the apps' folders** as the `PUID`/`PGID` user, so Docker doesn't create them owned by root. Dozzle's
+   is the exception: Dozzle runs as root, so Docker creates `CONFIG_ROOT/dozzle/config` for it on the first start.
 
    ```sh
-   . ./.env && mkdir -p "$PROWLARR_CONFIG_PATH" "$QBITTORRENT_CONFIG_PATH" "$DOWNLOADS_PATH" \
-     "$HEIMDALL_CONFIG_PATH" "$MINECRAFT_DATA_PATH"
+   . ./.env && mkdir -p "$DOWNLOADS_PATH"
+   for app in prowlarr qbittorrent heimdall minecraft; do
+     mkdir -p "$CONFIG_ROOT/$app/config"
+   done
    ```
 
 4. **Check and start.**

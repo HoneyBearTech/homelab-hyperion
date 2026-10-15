@@ -53,25 +53,25 @@ a non-empty reason:
 
 What each service runs with, beyond the policy. Every service has `cap_drop: [ALL]` and
 `no-new-privileges:true` and adds back only the capabilities in this table, all from Docker's default set. The
-smoke test, with data directories owned by `PUID`:`PGID` as on the host, proves each one still starts healthy and
-survives a backup and restore with these settings, and that autoheal can still restart a container through the
-socket proxy. Each capability was kept only after the service
-failed, logged an error or couldn't stop cleanly without it.
+smoke test, with the apps' folders owned by `PUID`:`PGID` as on the host (Dozzle's by root), proves each one still
+starts healthy and survives a backup and restore with these settings, and that autoheal can still restart a container
+through the socket proxy. Each capability was kept only after the service failed, logged an error or couldn't stop
+cleanly without it.
 
 | Service | Capabilities added back | Read-only root filesystem | Why |
 | --- | --- | --- | --- |
 | prowlarr | `CHOWN`, `SETUID`, `SETGID`, `KILL` | no | Its init (s6-overlay) runs as root, takes ownership of the data for `PUID`:`PGID`, runs Prowlarr as that user and signals it on shutdown. The init runs from `/run` and writes to the image's own directories, so the root stays writable (a `/run` tmpfs is mounted noexec, and the init can't start) |
 | qbittorrent | `CHOWN`, `DAC_OVERRIDE`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also writes the default settings into a data directory that belongs to `PUID` |
 | heimdall | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also sets up nginx, PHP and the app in directories that belong to `PUID` and sets the mode of the app's settings file. Ports 80 and 443 need no capability: Docker lets any process in a container bind low ports |
-| dozzle | none | yes (`/tmp` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI go to `/data`, the named volume `dozzle-data`, which Docker creates owned by root |
+| dozzle | none | yes (`/tmp` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI go to `/data`, its folder `CONFIG_ROOT/dozzle/config`, which Docker creates owned by root |
 | minecraft | `SETUID`, `SETGID` | yes (`/tmp` in memory) | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server; the server and the world are in its data mount |
 | autoheal | none | yes | Only talks to the socket proxy |
 | socket-proxy | none | yes (`/run`, `/tmp` in memory) | Only reads the socket |
 
 The root inside a container without capabilities can only reach what it owns. Data adopted from another
 installation must therefore be owned as each image expects: the linuxserver.io services' and the Minecraft
-server's data by `PUID`:`PGID`; a service that fails with "permission denied" (`EACCES`) on its first start
-usually has data with an unexpected owner.
+server's data by `PUID`:`PGID`, Dozzle's by root; a service that fails with "permission denied" (`EACCES`) on its
+first start usually has data with an unexpected owner.
 
 ## What it doesn't protect
 

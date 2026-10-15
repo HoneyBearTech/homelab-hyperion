@@ -13,20 +13,17 @@ setting marked required stops `docker compose` with an error naming it when it's
 | Setting | Required | Example | Meaning |
 | --- | --- | --- | --- |
 | `TZ` | yes | `Etc/UTC` | Time zone (tz database name) for logs and schedules. |
-| `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own the data directories and be able to write the downloads directory. |
-| `PROWLARR_CONFIG_PATH` | yes | `/srv/appdata/prowlarr` | Prowlarr's database and settings, including the indexers' credentials. |
-| `QBITTORRENT_CONFIG_PATH` | yes | `/srv/appdata/qbittorrent` | qBittorrent's settings and torrent list. |
+| `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads directory. |
+| `CONFIG_ROOT` | yes | `/srv/config` | Host directory with each app's folder: `<app>/config` holds its settings and database (Minecraft's worlds), for `prowlarr`, `qbittorrent`, `heimdall`, `minecraft` and `dozzle`, mounted at the app's data path ([below](#volumes-and-mounts)). Owned by `PUID:PGID`, except `dozzle/config`, owned by root. Holds Prowlarr's indexer credentials and every login: back it up. Never a path inside `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). |
 | `DOWNLOADS_PATH` | yes | `/srv/downloads` | Where qBittorrent saves downloads. Never backed up by this stack. |
-| `HEIMDALL_CONFIG_PATH` | yes | `/srv/appdata/heimdall` | Heimdall's database and settings. |
 | `DOZZLE_REMOTE_AGENT` | no | `agent-one.example.com:7007` | Dozzle agents on other hosts (`host:port`, comma-separated) whose containers Dozzle also shows. Empty: this host only. |
-| `MINECRAFT_DATA_PATH` | yes | `/srv/appdata/minecraft-bedrock` | The Minecraft server's worlds, settings and allowlist. |
-| `MINECRAFT_LEVEL_NAME` | yes | `Bedrock level` | The world the server opens: the name of its folder under `worlds/` in `MINECRAFT_DATA_PATH`. A new installation starts a new world with this name. |
+| `MINECRAFT_LEVEL_NAME` | yes | `Bedrock level` | The world the server opens: the name of its folder under `worlds/` in `CONFIG_ROOT/minecraft/config`. A new installation starts a new world with this name. |
 | `MINECRAFT_ADDRESS` | yes | `192.0.2.10` | The address players reach this host at (an IP literal, not a hostname). The server hands it to each client with its gameplay port. |
 | `MINECRAFT_EULA` | yes | `TRUE` | Accepts the [Minecraft EULA](https://www.minecraft.net/eula); must be `TRUE` for the server to start. |
 
 The Bedrock Dedicated Server's version is not a setting: it is pinned in `compose.yaml` (`VERSION`), like the
 images, and so are its allowlist (on) and its transport (NetherNet, the only one clients use since 1.26.50).
-Its other game settings live in `server.properties` in its data directory.
+Its other game settings live in `server.properties` in its folder, `CONFIG_ROOT/minecraft/config`.
 
 No secret is a setting. A service that needs one in its environment gets its own gitignored `<service>.env`
 (mode `600`) with a committed `<service>.env.example`, listed below.
@@ -83,12 +80,12 @@ in the middle of a database migration or while the Minecraft image downloads its
 
 | Container path | Host source | Service |
 | --- | --- | --- |
-| `/config` | `PROWLARR_CONFIG_PATH` | Prowlarr: database and settings |
-| `/config` | `QBITTORRENT_CONFIG_PATH` | qBittorrent: settings and torrent list |
+| `/config` | `CONFIG_ROOT/prowlarr/config` | Prowlarr: database and settings |
+| `/config` | `CONFIG_ROOT/qbittorrent/config` | qBittorrent: settings and torrent list |
 | `/downloads` | `DOWNLOADS_PATH` | qBittorrent: downloads (read-write; never backed up) |
-| `/config` | `HEIMDALL_CONFIG_PATH` | Heimdall: database and settings |
-| `/data` | `MINECRAFT_DATA_PATH` | Minecraft server: worlds, `server.properties`, allowlist and permissions |
-| `/data` | named volume `dozzle-data` | Dozzle: settings saved in its UI |
+| `/config` | `CONFIG_ROOT/heimdall/config` | Heimdall: database and settings |
+| `/data` | `CONFIG_ROOT/minecraft/config` | Minecraft server: worlds, `server.properties`, allowlist and permissions |
+| `/data` | `CONFIG_ROOT/dozzle/config` | Dozzle: settings saved in its UI |
 | `/var/run/docker.sock` | the Docker socket, read-only | Dozzle (allowed by label) and the socket proxy (allowed by label) |
 
 The socket proxy and autoheal share the internal network `docker-proxy`, which has no route out and nothing
@@ -113,8 +110,8 @@ published; autoheal also joins the default network, to reach its webhook.
 | `make test`, `make lint` | The checker's tests and the linters |
 | `scripts/backup.sh [DIR]` | Archives every service's data mounts (every read-write volume or bind mount except the Docker socket, anonymous volumes and the paths in the service's `backup.skip` label: the downloads directory; a mount inside another mount is archived on its own and left out of the outer archive), `.env` and any `<service>.env` into `DIR` (default `backups/<date>-<time>`, gitignored) with a `MANIFEST`, `NETWORKS` (the address range of each network the stack uses but doesn't create; this stack has none, so only the header), `VERSION` (the checkout's `git describe`) and `SHA256SUMS`, all mode `600`. Each service is stopped only while its own mounts are copied and started again (with any service Compose stopped along with it) before the copies are compressed (with `pigz` when it's installed, else `gzip`). Leaves out the paths a service's `org.honeybeartech.hyperion.backup.exclude` label lists. If the pull agent keeps state for this stack (`${HOMELAB_PULL_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/homelab-pull}/hyperion`), first takes its `lock` with `flock` (waiting up to 30 minutes for a deploy to finish) and holds it until it exits. Exit 0 = backup complete |
 | `scripts/scheduled-backup.sh` | Runs `scripts/backup.sh` into `BACKUP_DIR/<date>-<time>`, copies it to `BACKUP_REMOTE` with rsync (`SHA256SUMS` last), deletes all but the newest `BACKUP_REMOTE_KEEP` there and `BACKUP_KEEP` here, and reports to `BACKUP_PING_URL` ([`backup.env`](#backupenv)). Run nightly at 04:30 by the systemd user units in `deploy/systemd/` |
-| `scripts/restore.sh [--yes] DIR [SERVICE...]` | Verifies `DIR/SHA256SUMS`, checks the `MANIFEST`, asks for confirmation (unless `--yes`), stops the services, replaces the contents of each listed mount with its archive, and starts what was running. Writes only mounts the service still has read-write; never the Docker socket, a path in the service's `backup.skip` label, another mount inside the one it restores, or a path in its `backup.exclude` label. Holds the pull agent's lock as `scripts/backup.sh` does |
-| `make smoke` | `scripts/smoke-test.sh`: starts every service under a separate Compose project with throwaway directories (owned by `PUID`:`PGID` with mode 0755, as on the host) and no published ports, waits until all are healthy, round-trips a backup and restore over every data mount, checks that excluded mounts and paths were neither archived nor overwritten and that the backup has `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the copy and the pruning, checks that autoheal restarts a container that turns unhealthy, then removes what it created. Exit 0 = all healthy and restored |
+| `scripts/restore.sh [--yes] DIR [SERVICE...]` | Verifies `DIR/SHA256SUMS`, checks the `MANIFEST`, creates missing containers, asks for confirmation (unless `--yes`), stops the services, recreates a service's container if it predates `compose.yaml`, replaces the contents of each listed mount with its archive (owners and modes kept), and starts what was running. Each archive goes to what the service mounts at that container path now, whatever the `MANIFEST` names as its source (so a backup of the old data directories or of Dozzle's old volume restores into the folders under `CONFIG_ROOT`), and a missing folder is created. Writes only mounts the service still has read-write; never the Docker socket, a path in the service's `backup.skip` label, another mount inside the one it restores, or a path in its `backup.exclude` label. Holds the pull agent's lock as `scripts/backup.sh` does |
+| `make smoke` | `scripts/smoke-test.sh`: starts every service under a separate Compose project with throwaway directories and app folders under a throwaway `CONFIG_ROOT` (owned by `PUID`:`PGID` with mode 0755, as on the host; Dozzle's created by Docker, owned by root) and no published ports, waits until all are healthy, round-trips a backup and restore over every data mount, checks that an app's data restores through a container made from older settings into its folder under `CONFIG_ROOT`, removed beforehand, with its owner and mode, that excluded mounts and paths were neither archived nor overwritten and that the backup has `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the copy and the pruning, checks that autoheal restarts a container that turns unhealthy, then removes what it created. Exit 0 = all healthy and restored |
 
 ## Outbound connections
 
