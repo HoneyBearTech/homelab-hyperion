@@ -28,6 +28,12 @@ scripts/backup.sh                       # into backups/<date>-<time>/ in the che
 scripts/backup.sh /path/to/backup-dir   # or a directory of your choice (new or empty)
 ```
 
+If stopping a service fails while its container is still on its way down (a process stuck writing to a network
+share can outlast Docker's stop), the backup waits up to `BACKUP_STOP_WAIT` seconds (default 120) for it to exit,
+then carries on. If it still runs then, the backup fails, but starts the services again only after waiting once
+more, so Compose doesn't skip a container that is about to exit. A backup that leaves any service down that was
+running when it began fails and names it.
+
 It **never** archives the downloads directory: it is large, and the apps that import from it keep their own
 copies. A service can also leave paths inside a mount out of its archive with the
 `org.honeybeartech.hyperion.backup.exclude` label ([interfaces.md](interfaces.md#labels)); no service does yet.

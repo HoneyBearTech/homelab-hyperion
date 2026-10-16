@@ -74,6 +74,9 @@ services:
       - SETGID
       - KILL
     restart: unless-stopped
+    # Time to finish writing to /incomplete, which may be a network share, and exit cleanly on stop (as for the nightly
+    # backup) instead of being killed after Docker's default 10 s in the middle of a write.
+    stop_grace_period: 1m
     labels:
       autoheal: "true"
       # The downloads (finished and incomplete) are transient and large; the apps that import them keep their own
