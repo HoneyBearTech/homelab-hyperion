@@ -103,6 +103,15 @@ All notable changes to homelab-hyperion are documented here. The format follows
 - Docs: a deploy doesn't install changed systemd units; copy `deploy/systemd/` again and reload when they change
   ([docs/upgrading.md](docs/upgrading.md#following-main)). Leftover wording from before pull deploys corrected.
 
+### Security
+
+- Dozzle `v11.3.4` (was `v11.3.2`): built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`, Dozzle's
+  one image-scan finding. Deploying this recreates Dozzle, which then reconnects to its agents.
+- The image scan's findings are triaged again (352 alerts on 2026-10-22, 18 critical): every critical one in
+  qBittorrent 4.5.5 turns out not to apply to this image, and Prowlarr's two critical ASP.NET Core findings wait
+  for a Prowlarr release on a patched .NET runtime
+  ([docs/dependencies.md](docs/dependencies.md#current-findings)).
+
 
 ## [0.2.0] - 2026-10-14
 
