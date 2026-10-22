@@ -77,6 +77,13 @@ services:
     # Time to finish writing to /incomplete, which may be a network share, and exit cleanly on stop (as for the nightly
     # backup) instead of being killed after Docker's default 10 s in the middle of a write.
     stop_grace_period: 1m
+    # A torrent client keeps a file open for every file of every active torrent. containerd 2.x (Docker Engine 29's
+    # packages) gives containers a default limit of 1024 open files, which a few large torrents can use up
+    # ("Too many open files"); containerd 1.7 gave about a million.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     labels:
       autoheal: "true"
       # The downloads (finished and incomplete) are transient and large; the apps that import them keep their own
