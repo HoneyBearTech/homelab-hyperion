@@ -80,6 +80,9 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Fixed
 
+- qBittorrent may keep 65536 files open again (`ulimits: nofile`). On a server whose Docker Engine uses
+  containerd 2.x (Docker Engine 29's packages), containers start with a limit of 1024, which a torrent client with a
+  few large torrents can run out of ("Too many open files"); containerd 1.7 gave about a million.
 - `scripts/backup.sh` no longer leaves a service down when stopping it fails. A process that can't exit in time
   (stuck writing to a network share) made the stop fail while its container was still on its way down; the backup
   gave up, started the services again at once (Compose skipped the container, which still ran) and the service stayed
