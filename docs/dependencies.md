@@ -92,36 +92,89 @@ reported to code scanning). Each finding is triaged within 14 days:
 
 ### Current findings
 
-Triaged 13 October 2026, after the first image scan (283 alerts, every one HIGH or CRITICAL with a fixed package
-version somewhere upstream). Every image is maintained. autoheal and the socket proxy had none.
+Triaged on 2026-10-22, from the scan of `main` at `043f623`: **352 open alerts, 18 critical and 334 high** (258 at
+the first triage on 2026-10-13, which bumped Dozzle, Heimdall and the Minecraft image; 94 are new since). Code
+scanning opens one alert per finding and file, so a component listed in several files counts several times: the
+352 alerts are 127 distinct findings (one CVE or advisory in one image). Wherever a verdict depended on what an
+image contains or runs, the pinned image was inspected (its package database, binaries and entry scripts) rather
+than assumed. The alerts stay open in code scanning, so each closes by itself when an update ships the fix; none
+was dismissed.
 
-**Fixed by a bump.** Dozzle `v11.3.2` (all 4: the Go standard library and `golang.org/x/net`), Heimdall
-`v2.8.3-ls366` (9 of 20: Alpine's `apache2-utils` and `pcre2`) and the Minecraft image `2026.10.0` (12 of 40:
-Debian's OpenSSL and PCRE2, `mc-monitor`'s Go dependencies). The Minecraft server's own version is unchanged.
+| Image | Open alerts (critical) | Distinct findings | Action |
+| --- | --- | --- | --- |
+| qBittorrent `4.5.5-r0-ls292` | 173 (8) | 78 | **Held** at 4.5.5 by the maintainer. The upgrade to 5.x is ready in its own pull request and fixes all but one of them (a scan of that image still finds expat's CVE-2026-77214, fixed in 2.9.0) |
+| Prowlarr `version-2.6.5.5623` (build `ls165`) | 128 (10) | 19 | **Wait for upstream.** Every finding is in the .NET 8.0.27 runtime Prowlarr bundles, fixed in .NET 8.0.32 (2026-10-13); no Prowlarr build ships a newer runtime yet |
+| Minecraft image `2026.10.1` | 39 | 18 | **Wait for upstream.** The Go standard library in the image's helper tools, and Debian's curl |
+| Heimdall `version-v2.8.3` (build `ls368`) | 11 | 11 | **Wait for upstream.** PHP libraries Heimdall vendors |
+| Dozzle `v11.3.2` | 1 | 1 | **Fixed by a bump** to `v11.3.4`, built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`; a scan of `v11.3.4` finds nothing |
+| autoheal, socket-proxy | 0 | 0 | |
 
-**Accepted until the planned upgrade: qBittorrent 4.5.5** (171, 8 of them critical). The stack starts on the
-version the server already runs, so moving to it changes one thing at a time; the upgrade to 5.x follows in its
-own pull request ([roadmap](roadmap.md)), and no 4.x build is newer than 2024. Nearly all the findings are in
-the image's 2023 Alpine packages (OpenSSL 3.1.3, expat, PCRE2, curl, Python, musl, zlib). Two of the critical
-ones don't apply: CVE-2024-3094 is the xz backdoor, which only ever shipped in xz 5.6.0 and 5.6.1 (the image has
-5.4.4), and CVE-2026-31789 affects OpenSSL on 32-bit systems only. qBittorrent's own finding, CVE-2024-51774
-(before 5.0.1 it keeps using an HTTPS connection whose certificate failed validation), is reachable only from
-the network path of what qBittorrent fetches over HTTPS itself: RSS feeds, torrent URLs, its GeoIP database.
-Mitigated by keeping the web UI on the LAN and forwarding only the listening port
-([installing.md](installing.md#running-it-securely)).
+**Every critical finding:**
 
-**Open, waiting for upstream** (87). No newer image exists yet with the fixed package; each alert closes by
-itself when Dependabot's bump to such an image is merged and the scan runs again.
+| Component (image) | CVE | Fixed in | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| xz-libs 5.4.4 (qBittorrent) | CVE-2024-3094, the xz backdoor | 5.6.1-r2 | **Doesn't apply.** The backdoor only ever shipped in xz 5.6.0 and 5.6.1; the image's package database says 5.4.4. Alpine records the fix as 5.6.1-r2, so the scanner flags every older version | Held with qBittorrent |
+| libexpat 2.5.0 (qBittorrent) | CVE-2024-45491, CVE-2024-45492 | 2.6.3 | **Don't apply.** Integer overflows on 32-bit platforms only (where `UINT_MAX` equals `SIZE_MAX`); the image is x86_64 | Held with qBittorrent |
+| PCRE2 10.42: `pcre2`, `libpcre2-16` (qBittorrent) | CVE-2025-58050 | 10.46 | **Doesn't apply.** Only PCRE2 10.45 is affected (the `(*scs:…)` verb it involves is new in 10.45); the image has 10.42 | Held with qBittorrent |
+| OpenSSL 3.1.3: `openssl`, `libssl3`, `libcrypto3` (qBittorrent) | CVE-2026-31789 | 3.5.6 | **Doesn't apply.** A heap overflow on 32-bit platforms only; the image is x86_64 | Held with qBittorrent |
+| ASP.NET Core runtime 8.0.27 (Prowlarr) | CVE-2026-70188 (security feature bypass), CVE-2026-88092 (tampering) | .NET 8.0.32 | **Reachable from the LAN.** HTTP request smuggling in Kestrel, which serves Prowlarr's web UI and API. Mitigated: the UI stays on the LAN and Prowlarr requires a login ([installing.md](installing.md#running-it-securely)) | Wait for upstream |
 
-- **The .NET runtime bundled into Prowlarr (8.0.27, 48; fixed in 8.0.30).** The pinned build is Prowlarr's
-  newest release. Reachable through its web UI and API; mitigated by keeping them on the LAN with
-  authentication on. Fixed when Prowlarr ships a release on a newer runtime.
-- **PHP libraries vendored by Heimdall (11):** `league/commonmark`, `guzzlehttp/guzzle` and
-  `squizlabs/php_codesniffer` (a development tool that the web app never runs). Fixed when Heimdall updates its
-  dependencies; Heimdall's UI stays on the LAN.
-- **The Go standard library in the Minecraft image's helper tools (28):** `set-property`, `entrypoint-demoter`,
-  `easy-add` and `mc-server-runner`, built with Go 1.26.3 to 1.26.6. They run at start, on local files and the
-  server process, and don't listen on the network. Fixed when the image rebuilds them with a newer Go.
+**Notable high findings:**
+
+- **Prowlarr: the rest of .NET 8.0.27** (17 findings, 118 alerts): denial of service, elevation of privilege and
+  security feature bypasses in the runtime and ASP.NET Core. It is one runtime, listed in up to eight `*.deps.json`
+  files, so each finding counts five or eight times. Six were fixed in .NET 8.0.29 (2026-07-14) and 8.0.30
+  (2026-08-11), the rest in 8.0.32 (2026-10-13), yet Prowlarr's newest release (2.6.5.5623, 2026-09-16) and its
+  development branch still build on 8.0.27. The `System.Security.Cryptography.Pkcs` 8.0.1 finding (CVE-2026-84008)
+  is a package reference from MimeKit; the copy Prowlarr loads is ASP.NET Core 8.0.27's own, fixed by the same
+  runtime update. Reachable through the web UI and API (LAN, login required), and CVE-2026-50651 (an HTTP/2 flood
+  in the HTTP client) through the indexers Prowlarr connects to. Wait for upstream.
+- **qBittorrent 4.5.5** (held). Its own finding, CVE-2024-51774 (before 5.0.1 it keeps using an HTTPS connection
+  whose certificate failed validation), is reachable only from what qBittorrent fetches over HTTPS itself: RSS
+  feeds, torrent URLs, its GeoIP database. OpenSSL 3.1.3 (11 more findings) carries qBittorrent's own TLS
+  connections (libtorrent and Qt link it): the most exposed of the held findings. Python 3.11 and expat (30
+  findings) are there for qBittorrent's search plugins: nothing but Python links expat or xz's `liblzma`. New since
+  the first triage: curl's CVE-2026-92392 (HTTP/2 uploads). curl runs only as the health check, a plain HTTP
+  request to the container itself, and libcurl otherwise only for Qt's proxy auto-configuration, which isn't set
+  up; neither uploads anything, so it isn't reachable. zlib's CVE-2026-22184 is in the `untgz` demonstration
+  program, which Alpine's package doesn't ship (only `libz.so`): it doesn't apply. Mitigated by keeping the web UI
+  on the LAN and forwarding only the listening port ([installing.md](installing.md#running-it-securely)).
+- **Minecraft image** (39 alerts). The Go standard library in five helper tools: `set-property` 0.1.6 (Go 1.26.3,
+  15 alerts), `entrypoint-demoter` 0.5.1 (Go 1.26.5, 12), `easy-add` 0.8.17 (Go 1.26.6, 4), and `mc-monitor` 1.18.3
+  and `mc-server-runner` 1.16.1 (Go 1.27.2, one each: CVE-2026-111943, new). Not reachable: none of them listens on
+  the network or reads untrusted input. `set-property` writes `server.properties` at start, `entrypoint-demoter`
+  switches to `UID`:`GID` and starts the entry script, `easy-add` only installs the other tools while the image is
+  built, `mc-monitor` is the health check (a status ping to the server in the same container, no TLS), and
+  `mc-server-runner` runs the server with its remote console off. The image's main branch already has `easy-add`
+  and `mc-server-runner` built with Go 1.27.3 for its next release; `set-property` and `entrypoint-demoter` have no
+  newer release. Debian's curl `8.14.1-2+deb13u5` (new: CVE-2026-8286, CVE-2026-8927 and CVE-2026-92392, in `curl`
+  and `libcurl4t64`; fixed in `8.14.1-2+deb13u7`): not reachable, as they need STARTTLS, proxy Digest
+  authentication or HTTP/2 uploads, and the entry script only downloads (the server and its version list) over
+  HTTPS, with no proxy. Fixed when the image is rebuilt.
+- **Heimdall** (11, unchanged): `league/commonmark` 2.8.2 (9: denial of service, and an XSS filter bypass in an
+  extension; fixed in 2.9.0 to 2.10.2), `guzzlehttp/guzzle` 7.13.3 (CVE-2026-69246, a non-canonical host name gets
+  past host-based checks; fixed in 7.15.2) and `squizlabs/php_codesniffer` 3.13.5 (CVE-2026-67434, command
+  injection in its `gitblame` report; fixed in 3.13.6). Not reachable: commonmark comes with Laravel, and
+  Heimdall's own code renders no Markdown (checked in the image); php_codesniffer is a development tool the web
+  app never runs; Heimdall calls the apps it links to with Guzzle but allows or blocks nothing by host name. Fixed
+  when Heimdall updates its dependencies; its UI stays on the LAN.
+
+**Older than 60 days.** These findings have had a fix public for more than 60 days (as of 2026-10-22), so they keep
+the OpenSSF Best Practices criterion on fixing vulnerabilities within 60 days unmet: qBittorrent's (held), at least
+those from 2023 to 2025 that apply, its own CVE-2024-51774 among them; six of Prowlarr's (fixed in .NET on
+2026-07-14 and 2026-08-11, in no Prowlarr release yet); the Go findings in the Minecraft image's `set-property`
+(11) and `entrypoint-demoter` (8), fixed in Go 1.26.4 to 1.26.6 (2026-06-02 to 2026-08-13); and six of Heimdall's
+(advisories of 2026-08-03 and 2026-08-06). The other images' remaining findings reach 60 days between 2026-10-31
+and 2026-12-18 unless upstream ships the fixes first; Prowlarr's .NET 8.0.32 findings, both critical ones included,
+on 2026-12-12.
+
+**Watch: Prowlarr's .NET runtime.** Prowlarr's releases lag the runtime they bundle (its newest ships .NET 8.0.27,
+from May 2026), and .NET 8 is supported only until 2026-11-10. If no Prowlarr release on a patched runtime
+(.NET 8.0.32 or later, or .NET 10) has shipped by the next quarterly review (January 2027), reassess (step 3).
+
+**Watch: the Minecraft image's `set-property` and `entrypoint-demoter`.** Last built in May and July 2026, with Go
+releases that have had security fixes since. If they haven't been rebuilt by the next quarterly review (January
+2027), ask upstream for a rebuild.
 
 ## Licenses
 
