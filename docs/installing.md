@@ -34,6 +34,7 @@ yet).
 | Heimdall's database and settings | `CONFIG_ROOT/heimdall/config` | `/config` |
 | The Minecraft server's worlds and settings | `CONFIG_ROOT/minecraft/config` | `/data` |
 | Dozzle's settings (saved in its UI) | `CONFIG_ROOT/dozzle/config` | `/data` |
+| Dozzle's certificate and key for its agents (owned by root, not backed up; [below](#dozzles-certificate)) | `CONFIG_ROOT/dozzle/certs` | `/run/secrets/dozzle_cert`, `/run/secrets/dozzle_key`, read-only |
 | Steerhouse's playbooks, run logs, Galaxy content and git checkouts | `CONFIG_ROOT/steerhouse/config` | `/data` (the workers: `galaxy/` at `/galaxy`, read-only) |
 | Steerhouse's secrets (not backed up) | `CONFIG_ROOT/steerhouse/secrets` | `/run/secrets/<name>`, read-only |
 | Steerhouse's database, and its TLS certificate and key (`tls/`) | `CONFIG_ROOT/steerhouse-postgres/config` | `/var/lib/postgresql` |
@@ -68,8 +69,9 @@ restart qBittorrent (`docker compose restart qbittorrent`). The setting is kept 
 2. Create `.env` from `.env.example` (mode `600`) and set every value, including `MINECRAFT_EULA=TRUE`.
    Optionally create `autoheal.env` from `autoheal.env.example` (mode `600`) for restart notices.
 3. Create the apps' folders as the `PUID`:`PGID` user (all but Dozzle's,
-   [quick start](quick-start.md)), and Steerhouse's secrets, tokens and database certificate
-   ([below](#steerhouse)), then `docker compose up -d --wait`.
+   [quick start](quick-start.md)), Steerhouse's secrets, tokens and database certificate
+   ([below](#steerhouse)) and Dozzle's certificate and key ([below](#dozzles-certificate)), then
+   `docker compose up -d --wait`.
 
 **Adopting existing containers.** If the services already run on the host (from Portainer stacks or another
 Compose project), move their existing data into the apps' folders instead of starting empty: stop the old
@@ -181,6 +183,54 @@ over plain HTTP: keep the port on the LAN.
 while its folder is copied, which keeps the copy consistent), certificate included; never the secrets. To restore
 on a new host, put the secret files and `steerhouse.env` back first, from the password manager.
 
+## Dozzle's certificate
+
+Dozzle and its agents on other hosts (`DOZZLE_REMOTE_AGENT`) authenticate each other with a certificate and key:
+each end presents the pair and accepts only a peer that presents the same one. Every Dozzle image also ships a
+built-in pair, the same in every copy, so an agent that uses it accepts anyone on the network who has a Dozzle image,
+and through it they can read every container's log on that host and control its Docker. This stack's Dozzle never
+uses the built-in pair: it reads its own from two files under `CONFIG_ROOT/dozzle/certs` (Docker secrets, mounted
+read-only in `/run/secrets`), and it doesn't start while either file is missing. Every agent it connects to needs the
+same pair (the homelab's agent stacks read it the same way).
+
+| File | Owner, mode | What |
+| --- | --- | --- |
+| `CONFIG_ROOT/dozzle/certs/dozzle_cert.pem` | `root:root`, `644` | The certificate (self-signed, valid for five years) |
+| `CONFIG_ROOT/dozzle/certs/dozzle_key.pem` | `root:root`, `600` | Its private key: **a secret**; whoever holds it can connect to every agent |
+
+Both belong to root: Dozzle runs as root without capabilities, so it can read only a file that root owns (or one
+that every user can read, which the key must never be).
+
+**One pair for Dozzle and all its agents.** Make it once, on a machine you trust, with the Dozzle image this stack
+pins (the `image:` of `dozzle` in `compose.yaml`):
+
+```sh
+mkdir -m 700 dozzle-pair
+docker run --rm --network none -v "$PWD/dozzle-pair:/out" amir20/dozzle:<tag>@sha256:<digest> \
+  --no-analytics generate-certs --cert-out /out/dozzle_cert.pem --key-out /out/dozzle_key.pem
+```
+
+Save both files in a password manager, with Steerhouse's secrets: they are never in the stack's backups
+(`scripts/backup.sh` copies read-write mounts only), so that is where a rebuilt host gets them back from. Then copy
+them to this host and to every agent's (for example with `scp` into your home directory) and, in each checkout, put
+them in place:
+
+```sh
+. ./.env
+sudo install -d -o root -g root -m 755 "$CONFIG_ROOT/dozzle/certs"
+sudo install -o root -g root -m 644 ~/dozzle_cert.pem "$CONFIG_ROOT/dozzle/certs/dozzle_cert.pem"
+sudo install -o root -g root -m 600 ~/dozzle_key.pem "$CONFIG_ROOT/dozzle/certs/dozzle_key.pem"
+rm ~/dozzle_cert.pem ~/dozzle_key.pem
+```
+
+`docker compose logs dozzle` then says `Loaded custom dozzle certificate and key` at each start, and Dozzle lists
+each agent as a host of its own. An agent whose pair differs is refused, and Dozzle shows it as unavailable (its log
+says `authentication handshake failed`). So to change the pair (before it expires, or at once if the key may have
+leaked), put the new one on every host first, then recreate the agents and Dozzle with it, one right after the other
+(`docker compose up -d --force-recreate dozzle` here), Dozzle last, so that it connects to every agent afresh: until
+then it can't show the hosts whose pair differs from its own. The logs themselves aren't lost: Docker keeps them,
+and Dozzle shows them again once it reaches the agent.
+
 ## Running it securely
 
 - **Web UIs on the LAN only.** Don't publish Prowlarr's, qBittorrent's, Heimdall's or Dozzle's ports beyond the
@@ -190,7 +240,8 @@ on a new host, put the secret files and `steerhouse.env` back first, from the pa
   Heimdall and Dozzle can have one.
 - **Treat Dozzle as admin access.** It reads every container's logs through the Docker socket, and every
   connected host's through its Dozzle agent; keep those agents' ports on the LAN too. The socket is
-  mounted read-only, which protects the socket file, not the API behind it.
+  mounted read-only, which protects the socket file, not the API behind it. Its key is a credential for every
+  agent: keep it secret ([Dozzle's certificate](#dozzles-certificate)).
 - **autoheal only through the socket proxy**, which allows listing, inspecting, restarting and stopping
   containers and nothing else, on a network with no published ports.
 - **Steerhouse holds the keys to other machines.** Keep its web UI behind the reverse proxy's HTTPS and on the

@@ -115,7 +115,9 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
   lists, and turn on the logins they offer. Docker-published ports bypass host firewalls such as `ufw`.
 - Dozzle can read every container's logs through the Docker socket, and those of every host whose Dozzle agent
   it connects to, and logs can hold secrets. It mounts the
-  socket read-only, but that doesn't limit the API: treat its web UI as admin access to the host.
+  socket read-only, but that doesn't limit the API: treat its web UI as admin access to the host. It and its agents
+  authenticate each other with a certificate and key of your own, never the pair built into every Dozzle image
+  ([docs/installing.md](docs/installing.md#dozzles-certificate)): keep the key secret.
 - autoheal reaches Docker only through the socket proxy, which lets it list, inspect, restart and stop
   containers and nothing else.
 - qBittorrent's peers see your public IP address. Whether to route it through a VPN is your call; this stack

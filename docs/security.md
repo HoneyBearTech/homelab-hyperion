@@ -71,7 +71,7 @@ cleanly without it.
 | prowlarr | `CHOWN`, `SETUID`, `SETGID`, `KILL` | no | Its init (s6-overlay) runs as root, takes ownership of the data for `PUID`:`PGID`, runs Prowlarr as that user and signals it on shutdown. The init runs from `/run` and writes to the image's own directories, so the root stays writable (a `/run` tmpfs is mounted noexec, and the init can't start) |
 | qbittorrent | `CHOWN`, `DAC_OVERRIDE`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also writes the default settings into a data directory that belongs to `PUID` |
 | heimdall | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` | no | As Prowlarr; the init also sets up nginx, PHP and the app in directories that belong to `PUID` and sets the mode of the app's settings file. Ports 80 and 443 need no capability: Docker lets any process in a container bind low ports |
-| dozzle | none | yes (`/tmp` in memory) | Reads the Docker socket, which belongs to root, the user it runs as. Settings saved in its UI go to `/data`, its folder `CONFIG_ROOT/dozzle/config`, which Docker creates owned by root |
+| dozzle | none | yes (`/tmp` in memory) | Reads the Docker socket and its certificate and key, all owned by root, the user it runs as. Settings saved in its UI go to `/data`, its folder `CONFIG_ROOT/dozzle/config`, which Docker creates owned by root |
 | minecraft | `SETUID`, `SETGID` | yes (`/tmp` in memory) | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server; the server and the world are in its data mount |
 | autoheal | none | yes | Only talks to the socket proxy |
 | socket-proxy | none | yes (`/run`, `/tmp` in memory) | Only reads the socket |
@@ -95,7 +95,8 @@ first start usually has data with an unexpected owner.
 - **The downloads.** They aren't backed up; the apps that import them keep their own copies.
 - **Access to the web UIs.** Keeping them on the LAN, behind a reverse proxy's access lists, with each service's
   login turned on, is the operator's job ([installing.md](installing.md#running-it-securely)). Anyone who can use
-  Dozzle can read every container's logs. Anyone who can run playbooks in Steerhouse can reach the machines its
+  Dozzle can read every container's logs, and anyone who holds its key can connect to its agents as Dozzle does: the
+  agents refuse the pair built into every Dozzle image, not that one ([installing.md](installing.md#dozzles-certificate)). Anyone who can run playbooks in Steerhouse can reach the machines its
   credentials open; who may do what there is Steerhouse's configuration.
 - **What Steerhouse's playbooks do on the LAN.** Its workers reach the LAN by design (they manage machines over SSH);
   the egress filter only keeps runs away from Steerhouse's own API and cloud metadata.
@@ -119,6 +120,7 @@ first start usually has data with an unexpected owner.
 | Logins of the services that have them (Prowlarr, qBittorrent, optionally Heimdall and Dozzle) | each service's data | the repository, `.env`, issues, logs you paste |
 | Indexer credentials and API keys; the media apps' API keys | Prowlarr's data | same |
 | autoheal's notification webhook URL (optional) | the gitignored `autoheal.env`, mode `600` | same |
+| Dozzle's key, which its agents accept as the hub's (whoever holds it can read every agent's host's logs and control its Docker) | `CONFIG_ROOT/dozzle/certs/dozzle_key.pem` (root, mode `600`) and the password manager | the repository, `.env`, issues, logs you paste, the stack's backups |
 | Steerhouse's database password, session key, admin password, `grafana_ro`'s password and `credential_encryption_key` (which encrypts every SSH key, vault password and token it stores) | files in `CONFIG_ROOT/steerhouse/secrets` (mode `700`, files `600`), mounted read-only as Docker secrets into the database and the API only; copies in the maintainer's password manager | the repository, `.env`, the stack's backups, issues, logs you paste |
 | Steerhouse's `WORKER_TOKEN` and `METRICS_TOKEN` | the gitignored `steerhouse.env`, mode `600` (the metrics token also in Argus' Prometheus) | the repository, `.env`, issues, logs you paste |
 | The key of Steerhouse's database certificate, and its CA's key | `CONFIG_ROOT/steerhouse-postgres/config/tls/server.key` (mode `600`, backed up with the database); the CA's key off the host | the repository, issues |

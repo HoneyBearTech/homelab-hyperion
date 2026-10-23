@@ -92,6 +92,11 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   else; the certificate is from the owner's own CA (`scripts/steerhouse.sh`). Never loosen that, and never give
   another role remote access. The smoke test proves it (`scripts/smoke-stack.sh`). PostgreSQL majors are ignored by
   Dependabot (a major can't open the old data): a hand-made PR with a dump and restore.
+- **Dozzle never uses the certificate built into every Dozzle image** (2026-10-23): it and its agents (homelab-atlas,
+  -deimos, -helios) share one pair of the owner's, Docker secret files in `CONFIG_ROOT/dozzle/certs` on each host
+  (owned by root, never in the repo, `.env` or the backups; copy in the owner's password manager). Dozzle doesn't
+  start without them. A change to the pair is the owner's, on every host at once. The smoke test proves Dozzle
+  reaches an agent with the pair and not one with the built-in pair (`scripts/smoke-stack.sh`).
 - **Nightly backups as on ares and helios** (owner 2026-10-13): `scripts/scheduled-backup.sh` from a systemd user
   timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
   service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.

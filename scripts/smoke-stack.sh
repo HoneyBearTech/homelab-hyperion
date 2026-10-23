@@ -11,8 +11,24 @@
 # API's Galaxy folder.
 steerhouse_pg=postgres:18.6-trixie@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
 
+# Dozzle: a throwaway certificate and key, made with `dozzle generate-certs` as on the host and owned by root as there,
+# and two test agents on the stack's network for Dozzle to connect to: dozzle-agent-test with that pair, which Dozzle
+# must show as available, and dozzle-builtin-test with the pair built into every Dozzle image, which it must not
+# reach. Each has a host id of its own: on the same Docker as Dozzle, it would otherwise be merged with this host.
+dozzle_agents="dozzle-agent-test:7007,dozzle-builtin-test:7007"
+
+# Each host on Dozzle's page (its config__json), one "<endpoint> <available>" per line.
+dozzle_hosts() {
+  docker run --rm --network "${project}_default" "$busybox" wget -qO - http://dozzle:8080/ </dev/null |
+    python3 -I -c '
+import json, re, sys
+match = re.search(r"id=\"config__json\"[^>]*>([^<]*)<", sys.stdin.read())
+for host in json.loads(match.group(1))["hosts"] if match else []:
+    print(host["endpoint"], host["available"])'
+}
+
 smoke_prepare() {
-  local config_root puid pgid made
+  local config_root puid pgid made dozzle_image
   config_root=$(sed -n 's/^CONFIG_ROOT=//p' "$work/env")
   puid=$(sed -n 's/^PUID=//p' "$work/env")
   pgid=$(sed -n 's/^PGID=//p' "$work/env")
@@ -42,6 +58,33 @@ smoke_prepare() {
       printf '  %s:\n    env_file: !override\n      - %s\n' "$service" "$made/steerhouse.env"
     done
   } >"$work/override-stack.yaml"
+
+  # Dozzle's pair, in its folder as root (CONFIG_ROOT belongs to PUID); generate-certs writes the key with mode 0600 and
+  # the certificate with 0644, owned by root, the user it runs as.
+  dozzle_image=$(compose config --images dozzle)
+  docker run --rm --network none -v "$config_root:/c" "$busybox" mkdir -p /c/dozzle/certs </dev/null
+  docker run --rm --network none -v "$config_root/dozzle/certs:/out" "$dozzle_image" --no-analytics generate-certs \
+    --cert-out /out/dozzle_cert.pem --key-out /out/dozzle_key.pem </dev/null >/dev/null
+  cat >>"$work/override-stack.yaml" <<YAML
+  dozzle:
+    environment:
+      DOZZLE_REMOTE_AGENT: $dozzle_agents
+  dozzle-agent-test:
+    image: $dozzle_image
+    command: agent
+    environment:
+      DOZZLE_HOST_ID: smoke-agent-test
+      DOZZLE_CERT: /run/secrets/dozzle_cert
+      DOZZLE_KEY: /run/secrets/dozzle_key
+    secrets: [dozzle_cert, dozzle_key]
+    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+  dozzle-builtin-test:
+    image: $dozzle_image
+    command: agent
+    environment:
+      DOZZLE_HOST_ID: smoke-builtin-test
+    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+YAML
 }
 
 # psql in a throwaway container on Steerhouse's network $1, as user $2 with password $3 and the extra connection
@@ -53,7 +96,7 @@ steerhouse_psql() {
 }
 
 smoke_check() {
-  local made=$work/steerhouse grafana app metrics out tls
+  local made=$work/steerhouse grafana app metrics out tls hosts
   grafana=$(cat "$made/secrets/grafana_db_password")
   app=$(cat "$made/secrets/postgres_password")
   metrics=$(sed -n 's/^METRICS_TOKEN=//p' "$made/steerhouse.env")
@@ -105,4 +148,19 @@ smoke_check() {
   compose exec -T steerhouse-worker test -e /galaxy/.smoke-galaxy ||
     fail "the worker doesn't see the API's Galaxy folder"
   echo "Steerhouse: the worker is ready and sees the API's Galaxy folder"
+
+  # Dozzle started with its pair, and reaches the test agent that has it but not the one with the built-in pair. It
+  # dials an agent again when its page is loaded, so a test agent that started after it shows up within seconds.
+  compose logs --no-color dozzle | grep "Loaded custom dozzle certificate and key" >/dev/null ||
+    fail "Dozzle didn't load its certificate and key"
+  for _ in $(seq 1 30); do
+    hosts=$(dozzle_hosts)
+    if [[ $hosts == *"dozzle-agent-test:7007 True"* ]]; then break; fi
+    sleep 2
+  done
+  [[ $hosts == *"dozzle-agent-test:7007 True"* ]] ||
+    fail "Dozzle doesn't reach the agent that has its certificate and key: $hosts"
+  [[ $hosts == *"dozzle-builtin-test:7007 False"* ]] ||
+    fail "Dozzle reached the agent with the built-in certificate, or doesn't list it: $hosts"
+  echo "Dozzle: reaches an agent with its own certificate and key, and not one with the built-in pair"
 }

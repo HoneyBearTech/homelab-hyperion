@@ -8,6 +8,10 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Upgrading
 
+- **Put Dozzle's certificate and key in `CONFIG_ROOT/dozzle/certs` before deploying this** (owned by root; the same
+  pair on every agent, whose stacks need their own update: [docs/installing.md](docs/installing.md#dozzles-certificate)).
+  Without them Dozzle doesn't start. Once Dozzle has its pair it reaches only the agents that have it too, so switch
+  the agents and Dozzle one right after the other, Dozzle last.
 - **Steerhouse needs its secrets, tokens, certificate and settings on the host before this is deployed**
   ([installing.md](docs/installing.md#steerhouse)). As the `PUID` user, in the checkout: create
   `CONFIG_ROOT/steerhouse/config` and `CONFIG_ROOT/steerhouse-postgres/config`, run `scripts/steerhouse.sh secrets
@@ -201,6 +205,12 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Security
 
+- **Dozzle no longer connects to its agents with the certificate built into every Dozzle image.** The agents warned
+  (Dozzle v11.3.4) that they used that pair, which every copy of the image ships, so anyone on the LAN with a Dozzle
+  image could connect to them as the hub. Dozzle now reads a pair of its own, shared only with its agents, from
+  Docker secrets in `CONFIG_ROOT/dozzle/certs` (owned by root, never committed or backed up), and doesn't start
+  without it. The smoke test makes a throwaway pair and checks that Dozzle reaches a test agent that has it and not
+  one with the built-in pair ([docs/installing.md](docs/installing.md#dozzles-certificate)).
 -- Steerhouse's worker keeps the `NET_ADMIN` capability (label `org.honeybeartech.hyperion.allow.cap-add`; the
   maintainer agreed on 2026-10-22) for its egress filter, which keeps playbook runs from reaching Steerhouse's API and
   cloud metadata. Every other Steerhouse service drops all capabilities; the API, workers and database have

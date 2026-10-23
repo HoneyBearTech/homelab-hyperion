@@ -1,7 +1,7 @@
 # The Hyperion stack. Every setting comes from .env (template: .env.example; reference: docs/interfaces.md); the
 # secrets a service can only read from its environment from <service>.env (templates: autoheal.env.example,
-# steerhouse.env.example), and Steerhouse's other secrets from files under CONFIG_ROOT/steerhouse/secrets (Docker
-# secrets, below).
+# steerhouse.env.example), Steerhouse's other secrets from files under CONFIG_ROOT/steerhouse/secrets and Dozzle's
+# certificate and key from files under CONFIG_ROOT/dozzle/certs (Docker secrets, at the end).
 # Every image is pinned as name:tag@sha256:<digest>; Dependabot proposes updates (patch, minor and major ones merge
 # automatically once CI passes). scripts/check_compose.py enforces the policy (docs/security.md#policy).
 # Each app's settings and data live in its own host folder, CONFIG_ROOT/<app>/config, and nowhere else: no named
@@ -155,7 +155,8 @@ services:
     restart: unless-stopped
     # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, its folder
     # under CONFIG_ROOT: Docker creates it owned by root, the user Dozzle runs as, so it writes there with no
-    # capabilities.
+    # capabilities. It connects to its agents with the homelab's own certificate and key (the secrets at the end),
+    # never the pair built into every Dozzle image, which the agents refuse.
     read_only: true
     tmpfs:
       - /tmp
@@ -170,6 +171,11 @@ services:
     environment:
       # Dozzle agents on other hosts whose containers Dozzle also shows; empty for this host only.
       DOZZLE_REMOTE_AGENT: ${DOZZLE_REMOTE_AGENT:-}
+      DOZZLE_CERT: /run/secrets/dozzle_cert
+      DOZZLE_KEY: /run/secrets/dozzle_key
+    secrets:
+      - dozzle_cert
+      - dozzle_key
     ports:
       - "4040:8080"
     volumes:
@@ -561,6 +567,11 @@ networks:
 # Steerhouse's secrets, as files on the host (docs/installing.md#steerhouse); Compose mounts each read-only at
 # /run/secrets/<target> in the services that list it. Never committed, and never in the stack's backups: keep them,
 # and above all credential_encryption_key, in a password manager.
+# Then the certificate and key Dozzle and its agents authenticate each other with: one pair, made once with
+# `dozzle generate-certs`, the same here and on every agent (docs/installing.md#dozzles-certificate). Owned by root:
+# Dozzle runs as root without capabilities, so it can read only a file that root owns. Dozzle doesn't start while one
+# is missing, so it never falls back to the built-in pair. Never committed or backed up either: keep the key in the
+# password manager too.
 secrets:
   steerhouse_postgres_password:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/postgres_password
@@ -574,3 +585,7 @@ secrets:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/admin_password
   steerhouse_grafana_db_password:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/grafana_db_password
+  dozzle_cert:
+    file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/dozzle/certs/dozzle_cert.pem
+  dozzle_key:
+    file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/dozzle/certs/dozzle_key.pem

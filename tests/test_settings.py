@@ -37,6 +37,12 @@ STEERHOUSE_SECRETS = {
         "grafana_db_password",
     },
 }
+# The certificate and key Dozzle and its agents authenticate each other with: Docker secret files in Dozzle's folder
+# under CONFIG_ROOT (never backed up), so it never uses the pair built into every Dozzle image.
+DOZZLE_SECRETS = {
+    "dozzle_cert": "dozzle/certs/dozzle_cert.pem",
+    "dozzle_key": "dozzle/certs/dozzle_key.pem",
+}
 
 
 def mount(volume: str | dict) -> str:
@@ -106,12 +112,26 @@ def test_the_docs_warn_against_docker_volumes_for_app_data() -> None:
 def test_steerhouse_secrets_are_files_under_config_root_for_the_database_and_api_only() -> None:
     config = compose()
     for name, secret in config["secrets"].items():
+        if name in DOZZLE_SECRETS:
+            continue
         target = name.removeprefix("steerhouse_")
         assert secret == {"file": f"{CONFIG_ROOT}/steerhouse/secrets/{target}"}, name
     for name, service in config["services"].items():
+        if name == "dozzle":
+            continue
         targets = {s["target"] for s in service.get("secrets") or []}
         assert targets == STEERHOUSE_SECRETS.get(name, set()), name
         assert all(s["source"] == f"steerhouse_{s['target']}" for s in service.get("secrets") or []), name
+
+
+def test_dozzle_reads_its_certificate_and_key_from_secret_files_under_config_root() -> None:
+    config = compose()
+    for name, path in DOZZLE_SECRETS.items():
+        assert config["secrets"][name] == {"file": f"{CONFIG_ROOT}/{path}"}, name
+    dozzle = config["services"]["dozzle"]
+    assert dozzle["secrets"] == list(DOZZLE_SECRETS)
+    assert dozzle["environment"]["DOZZLE_CERT"] == "/run/secrets/dozzle_cert"
+    assert dozzle["environment"]["DOZZLE_KEY"] == "/run/secrets/dozzle_key"
 
 
 def test_steerhouse_env_example_has_the_tokens_only() -> None:

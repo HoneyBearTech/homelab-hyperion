@@ -14,7 +14,7 @@ setting marked required stops `docker compose` with an error naming it when it's
 | --- | --- | --- | --- |
 | `TZ` | yes | `Etc/UTC` | Time zone (tz database name) for logs and schedules. |
 | `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall, the Minecraft server and Steerhouse's API and database run as; must own those apps' folders under `CONFIG_ROOT` (and Steerhouse's secrets) and be able to write the downloads and incomplete directories. |
-| `CONFIG_ROOT` | yes | `/srv/config` | Host directory with each app's folder: `<app>/config` holds its settings and database (Minecraft's worlds), for `prowlarr`, `qbittorrent`, `heimdall`, `minecraft`, `dozzle`, `steerhouse` and `steerhouse-postgres`, mounted at the app's data path ([below](#volumes-and-mounts)), and `steerhouse/secrets` Steerhouse's secret files ([below](#steerhouses-secret-files)). Owned by `PUID:PGID`, except `dozzle/config`, owned by root. Holds Prowlarr's indexer credentials, Steerhouse's encrypted SSH keys and every login: back it up. Never a path inside `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). |
+| `CONFIG_ROOT` | yes | `/srv/config` | Host directory with each app's folder: `<app>/config` holds its settings and database (Minecraft's worlds), for `prowlarr`, `qbittorrent`, `heimdall`, `minecraft`, `dozzle`, `steerhouse` and `steerhouse-postgres`, mounted at the app's data path ([below](#volumes-and-mounts)), `steerhouse/secrets` Steerhouse's secret files ([below](#steerhouses-secret-files)), and `dozzle/certs` Dozzle's certificate and key ([below](#dozzles-certificate-files)). Owned by `PUID:PGID`, except `dozzle/config` and `dozzle/certs`, owned by root. Holds Prowlarr's indexer credentials, Steerhouse's encrypted SSH keys and every login: back it up. Never a path inside `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). |
 | `DOWNLOADS_PATH` | yes | `/srv/downloads` | Where qBittorrent saves downloads. Never backed up by this stack. |
 | `INCOMPLETE_PATH` | yes | `/srv/incomplete` | Where qBittorrent keeps torrents still downloading, mounted at `/incomplete`. Never backed up by this stack. |
 | `DOZZLE_REMOTE_AGENT` | no | `agent-one.example.com:7007` | Dozzle agents on other hosts (`host:port`, comma-separated) whose containers Dozzle also shows. Empty: this host only. |
@@ -118,6 +118,13 @@ restarts a container whose process exits). Each health check has a `start_period
 after an upgrade (10 minutes; 1 minute for autoheal and the socket proxy), so autoheal doesn't restart a service
 in the middle of a database migration or while the Minecraft image downloads its server.
 
+### Dozzle's certificate files
+
+Docker secrets too: `CONFIG_ROOT/dozzle/certs/dozzle_cert.pem` (mode `644`) and `dozzle_key.pem` (mode `600`), both
+owned by root, mounted read-only at `/run/secrets/dozzle_cert` and `/run/secrets/dozzle_key`, where `DOZZLE_CERT`
+and `DOZZLE_KEY` (set in `compose.yaml`) point Dozzle. The same pair as every agent's in `DOZZLE_REMOTE_AGENT`; never
+committed or backed up ([installing.md](installing.md#dozzles-certificate)).
+
 ## Volumes and mounts
 
 | Container path | Host source | Service |
@@ -133,6 +140,7 @@ in the middle of a database migration or while the Minecraft image downloads its
 | `/galaxy` | `CONFIG_ROOT/steerhouse/config/galaxy`, read-only | Steerhouse's workers: the API's Galaxy roles and collections |
 | `/var/lib/postgresql` | `CONFIG_ROOT/steerhouse-postgres/config` | Steerhouse's database (`18/docker`) and its TLS certificate and key (`tls/`) |
 | `/run/secrets/<name>` | `CONFIG_ROOT/steerhouse/secrets/<name>`, read-only | Steerhouse's database and API: their secrets ([above](#steerhouses-secret-files)); never backed up |
+| `/run/secrets/dozzle_cert`, `/run/secrets/dozzle_key` | `CONFIG_ROOT/dozzle/certs/dozzle_cert.pem` and `dozzle_key.pem`, read-only | Dozzle: the certificate and key it shares with its agents ([above](#dozzles-certificate-files)); never backed up |
 | `/var/run/docker.sock` | the Docker socket, read-only | Dozzle (allowed by label) and the socket proxy (allowed by label) |
 
 The socket proxy and autoheal share the internal network `docker-proxy`, which has no route out and nothing

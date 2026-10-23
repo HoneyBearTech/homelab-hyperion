@@ -41,7 +41,9 @@ user in the `docker` group, and the host ports the services use free ([installin
    ```
 
    Then Steerhouse's secrets, tokens and database certificate, as [installing.md](installing.md#steerhouse) shows
-   (`scripts/steerhouse.sh`).
+   (`scripts/steerhouse.sh`), and the certificate and key Dozzle shares with its agents, in
+   `CONFIG_ROOT/dozzle/certs` and owned by root: Dozzle doesn't start without them
+   ([installing.md](installing.md#dozzles-certificate)).
 
 4. **Check and start.**
 
