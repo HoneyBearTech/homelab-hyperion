@@ -40,6 +40,56 @@ All notable changes to homelab-hyperion are documented here. The format follows
   folder. Never put `CONFIG_ROOT` inside `/var/lib/docker/volumes`.
 - Backups taken before this restore as they are: `scripts/restore.sh` puts each archive into the app's folder under
   `CONFIG_ROOT`.
+- **qBittorrent 4.5.5 → 5.3.0.** qBittorrent rewrites its settings for 5.x the first time it starts, and 4.5.5
+  can't read them back, so:
+  1. **Back up first** (`scripts/backup.sh`, [docs/upgrading.md](docs/upgrading.md#backing-up)) and copy the backup
+     off the host. It holds qBittorrent's settings and torrent list (`CONFIG_ROOT/qbittorrent/config`). The
+     downloads (`DOWNLOADS_PATH`, `INCOMPLETE_PATH`) are never in a backup, by design, and the upgrade doesn't touch
+     them.
+  2. **Pause the torrents that are downloading** just before the deploy (in the web UI: the Downloading filter,
+     select all, Pause), so nothing is half-written to `/incomplete` when the container is recreated. Seeding
+     torrents can stay as they are: qBittorrent saves their state when it stops (it has a minute,
+     `stop_grace_period`). A force-started torrent that you pause and start again is no longer forced.
+  3. **Deploy.** On the first start, qBittorrent 5.3.0 moves these settings to new keys in `qBittorrent.conf` and
+     removes the old ones: the web UI's login (user name and password), port, address, IP-subnet whitelist, server
+     domains, host-header validation, reverse-proxy, HTTPS and security settings (from `[Preferences]`
+     `WebUI\…` to a `[WebUI]` section), "add torrents paused" (now "add torrents stopped"), the proxy, the action
+     when a share limit is reached, and the .torrent export folders (now "backup" folders). The torrent list,
+     categories, tags, save paths, `/incomplete` and the listening port stay as they are; no torrent is rechecked.
+     A password you set keeps working (tested with settings made by 4.5.5). 5.x calls pausing and resuming
+     "stopping" and "starting": start the torrents you paused.
+  4. **Right after the deploy, set qBittorrent's disk I/O:** Settings → Advanced → "Disk IO type (requires
+     restart)" → **Pread/pwrite**, then Save. This build's libtorrent (2.1) reads and writes files with
+     `pread`/`pwrite`, which is also what "Default" means here; 4.5.5's libtorrent (2.0) mapped the files into
+     memory instead, which suits a network share badly (the share's page cache counts as qBittorrent's memory, and
+     every page fault waits on the network). If the setting showed anything other than "Default", restart
+     qBittorrent after saving (`docker compose restart qbittorrent`). Never choose "Memory mapped files" while the
+     downloads are on a network share. This setting lives in qBittorrent's settings, not in `compose.yaml`
+     ([docs/installing.md](docs/installing.md#downloads-on-a-network-share)).
+  5. **Check:** you can sign in; every torrent is listed with its category and save path, and none shows "Missing
+     files" or "Errored"; Settings → Downloads still names `/downloads` and `/incomplete`; Settings → WebUI still has
+     your subnet whitelist, server domains and reverse-proxy settings; each media app's download client test passes
+     and a new download starts.
+- **What changes for the web UI and the media apps.** The listening port is now set from `TORRENTING_PORT` (6881)
+  on every start; the 4.5.5 image ignored that variable and used the port in qBittorrent's settings. qBittorrent
+  5.x has no default password any more: if none was ever set, it prints a temporary one for `admin` in its log on
+  every start (`docker compose logs qbittorrent`) until you set one; a password already set is kept. "Server
+  domains" now matches whole host names (`example.com` no longer matches `qbt.example.com`: list it, or use
+  `*.example.com`). Behind a reverse proxy, the client address now comes from the nearest hop that isn't in
+  "Trusted proxies list" (a fix for a whitelist bypass through a spoofed `X-Forwarded-For`), so list every proxy
+  between the clients and qBittorrent there. The web UI keeps at most 15 sessions, signing out the oldest. Sonarr,
+  Radarr and Lidarr support qBittorrent 5's Web API (v2.16) in their current releases; older ones don't know that
+  pausing became stopping.
+- **Rolling back qBittorrent means restoring its settings from the backup, not only the image.** qBittorrent 4.5.5
+  starts on the migrated settings, with its torrents and categories, but finds none of the moved ones and falls
+  back to its defaults (tested): the user name and password become 4.5.5's old default login `admin`/`adminadmin`,
+  the subnet whitelist and the reverse-proxy settings are gone, and host-header validation is back on, which turns
+  away requests that reach the web UI through a remapped port (8090 → 8080 here) with `401 Unauthorized`. On a
+  server that follows `main`, so that 4.5.5 never runs on the migrated settings: check out the commit before the
+  upgrade on the server (the pull agent pauses), run `scripts/restore.sh backups/<date>-<time> qbittorrent` (it
+  stops qBittorrent, recreates it with 4.5.5, puts back `CONFIG_ROOT/qbittorrent/config` and starts it), merge a
+  revert pull request, then `git switch main`. Torrents added after the backup drop out of the list; their files
+  stay in the downloads directories.
 
 ### Added
 
@@ -48,6 +98,17 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Changed
 
+- qBittorrent 5.3.0 replaces 4.5.5 (the maintainer lifted the hold on qBittorrent on 2026-10-22), as linuxserver.io's
+  `version-5.3.0_v2.1.2` tag (build `5.3.0_v2.1.2-ls484`, libtorrent 2.1.2), with the same capabilities, ports,
+  paths, limits and health check. libtorrent 2.1 reads and writes the files with `pread`/`pwrite` instead of mapping
+  them into memory, which suits downloads on a network share. Dependabot no longer ignores qBittorrent, but it can't
+  read this tag as a version (the `_v2.1.2` names the libtorrent): it proposes the tag's rebuilds, which merge by
+  themselves like the other images', and a new qBittorrent version is bumped by hand, after its release notes and a
+  check that the build still uses libtorrent 2.1 or newer
+  ([docs/dependencies.md](docs/dependencies.md#qbittorrent)). linuxserver.io's first builds of 5.3.0, on
+  2026-10-20 and 2026-10-21, used libtorrent 2.0 on both its main and its libtorrent 1.2 lines for some hours, and
+  the floating tags (`5.3.0`, `latest`, `libtorrentv1`) follow every build: pinned to one of those, a rebuild could
+  bring memory-mapped I/O back unattended.
 - Each app's settings and data move to one place on the host: `CONFIG_ROOT/<app>/config`, mounted at the same
   container path as before (`/config`; `/data` for Minecraft and Dozzle), the layout every homelab stack now uses
   (the maintainer's decision, 2026-10-15). The new required setting `CONFIG_ROOT` replaces `PROWLARR_CONFIG_PATH`,
@@ -72,11 +133,12 @@ All notable changes to homelab-hyperion are documented here. The format follows
   `version-v2.8.3`) instead of the build tag (`2.6.5.5623-ls163`, `v2.8.3-ls366`). Dependabot reads a build tag's
   `-lsNNN` as a suffix that must match exactly, so it never proposed a new version or build of either; with the
   `version-` tag it proposes both. The digests are unchanged, so the images are exactly the ones pinned before.
-  qBittorrent keeps its build tag while it is held at 4.5.5.
+  qBittorrent moves to its `version-` tag with its upgrade to 5.3.0 (above).
 - Dependabot's major updates now merge automatically too, once every required check passes (owner 2026-10-14), so
   they deploy to the maintainer's server unattended. A major can migrate a service's data one way: the nightly
   backup and `scripts/restore.sh` are the way back, not a revert alone. An update Dependabot can't classify still
-  waits for the maintainer; qBittorrent stays held and the Minecraft server's version is still set by hand.
+  waits for the maintainer; the Minecraft server's version is still set by hand, and so is a new qBittorrent
+  version (above).
 
 ### Fixed
 
@@ -105,6 +167,12 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Security
 
+- qBittorrent 5.3.0 fixes all 173 image-scan alerts on qBittorrent 4.5.5 (8 of them critical), most in its 2023
+  Alpine packages (OpenSSL 3.1.3, expat, Python), and qBittorrent's own CVE-2024-51774 (before 5.0.1 it kept using an
+  HTTPS connection whose certificate failed validation). A scan of the new image with the weekly scan's settings
+  (Trivy, `linux/amd64`, HIGH and CRITICAL with a fix) finds nothing. qBittorrent 5.x also brings upstream's later
+  security fixes, among them a bypass of the web UI's IP-subnet whitelist through a spoofed `X-Forwarded-For`
+  header and SMTP header injection in notification mails (5.3.0).
 - Dozzle `v11.3.4` (was `v11.3.2`): built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`, Dozzle's
   one image-scan finding. Deploying this recreates Dozzle, which then reconnects to its agents.
 - The image scan's findings are triaged again (352 alerts on 2026-10-22, 18 critical): every critical one in

@@ -43,6 +43,17 @@ create (owned by root) on the first start. autoheal and the socket proxy keep no
 > counts it as unused, and the app's data is gone. Keep the data under `CONFIG_ROOT`, which no prune touches, and
 > back it up ([below](#scheduled-backups)).
 
+### Downloads on a network share
+
+`DOWNLOADS_PATH` and `INCOMPLETE_PATH` may be on a network share (NFS or SMB, from a NAS). qBittorrent must then
+read and write the files rather than map them into memory: on a share, memory-mapped files make the share's page
+cache count as qBittorrent's memory and make every page fault wait on the network. The pinned build uses
+libtorrent 2.1, whose disk I/O does that by default. Check it in qBittorrent's web UI, under Settings → Advanced →
+"Disk IO type (requires restart)": **Default** or **Pread/pwrite**, never "Memory mapped files"; after changing it,
+restart qBittorrent (`docker compose restart qbittorrent`). The setting is kept in qBittorrent's own settings
+(`CONFIG_ROOT/qbittorrent/config`), so `compose.yaml` can't set it. qBittorrent also gets a minute to stop
+(`stop_grace_period`), so that it can finish writing to the share before Docker stops it.
+
 ## Installing
 
 1. Clone the repository (or download a release's source archive and verify it,
