@@ -8,11 +8,12 @@
 #   scripts/steerhouse.sh env FILE             FILE (steerhouse.env) with a new WORKER_TOKEN and METRICS_TOKEN
 #   scripts/steerhouse.sh ca DIR               a new certificate authority in DIR (ca.crt, ca.key), valid 10 years;
 #                                              keep DIR off the host
-#   scripts/steerhouse.sh cert CA_DIR DIR NAME...
-#                                              the database's certificate and key, signed by the CA in CA_DIR, for
-#                                              each NAME (a DNS name or an IP address Argus connects to), valid 3
-#                                              years, with the CA's certificate, in DIR
-#                                              (CONFIG_ROOT/steerhouse-postgres/config/tls)
+#   scripts/steerhouse.sh request DIR          on the host: the database's key (server.key) and a signing request
+#                                              (server.csr) in DIR (CONFIG_ROOT/steerhouse-postgres/config/tls)
+#   scripts/steerhouse.sh sign CA_DIR CSR CRT NAME...
+#                                              on the CA's machine: CRT, the certificate for CSR, signed by the CA in
+#                                              CA_DIR, for each NAME (a DNS name or an IP address Argus connects to),
+#                                              valid 3 years; copy it and the CA's ca.crt into DIR
 #   scripts/steerhouse.sh grafana-role         create grafana_ro, or set its password to grafana_db_password again,
 #                                              in the running stack
 #
@@ -103,11 +104,32 @@ CONF
   echo "Wrote $dir/ca.crt (give it to Argus) and $dir/ca.key (keep it off the host, with the secrets)."
 }
 
-cert() {
-  local ca_dir=$1 dir=$2 config sans="" name n=0
-  shift 2
-  [ $# -ge 1 ] || usage
+# The key never leaves the host: only the signing request goes to the CA's machine, and only certificates come back.
+request() {
+  local dir=$1 config
+  new_dir "$dir"
+  [ ! -e "$dir/server.key" ] || fail "$dir/server.key already exists; not replacing it"
+  config=$(mktemp)
+  printf '[req]\ndistinguished_name = dn\nprompt = no\n[dn]\nCN = Steerhouse database\n' >"$config"
+  (
+    umask 077
+    openssl req -new -newkey rsa:3072 -nodes -sha256 -config "$config" -keyout "$dir/server.key" \
+      -out "$dir/server.csr" 2>/dev/null
+  ) || {
+    rm -f "$config"
+    fail "openssl couldn't make the key"
+  }
+  rm -f "$config"
+  chmod 644 "$dir/server.csr"
+  echo "Wrote $dir/server.key (it stays here) and $dir/server.csr: sign the request with the CA (sign)."
+}
+
+sign() {
+  local ca_dir=$1 csr=$2 crt=$3 config sans="" name n=0
+  shift 3
   [ -f "$ca_dir/ca.crt" ] && [ -f "$ca_dir/ca.key" ] || fail "$ca_dir has no ca.crt and ca.key"
+  [ -f "$csr" ] || fail "$csr doesn't exist"
+  [ ! -e "$crt" ] || fail "$crt already exists; not replacing it"
   for name in "$@"; do
     n=$((n + 1))
     if [[ $name =~ ^[0-9.]+$ || $name == *:* ]]; then
@@ -118,15 +140,8 @@ cert() {
       fail "$name is neither a DNS name nor an IP address"
     fi
   done
-  new_dir "$dir"
-  [ ! -e "$dir/server.key" ] && [ ! -e "$dir/server.crt" ] || fail "$dir already holds a certificate; not replacing it"
-  config=$(mktemp -d)
-  cat >"$config/req.conf" <<CONF
-[req]
-distinguished_name = dn
-prompt = no
-[dn]
-CN = $1
+  config=$(mktemp)
+  cat >"$config" <<CONF
 [server]
 basicConstraints = critical, CA:FALSE
 keyUsage = critical, digitalSignature, keyEncipherment
@@ -135,18 +150,16 @@ subjectAltName = @names
 [names]
 $sans
 CONF
-  (
-    umask 077
-    openssl req -new -newkey rsa:3072 -nodes -sha256 -config "$config/req.conf" \
-      -keyout "$dir/server.key" -out "$config/server.csr" 2>/dev/null
-  )
-  openssl x509 -req -sha256 -days 1095 -in "$config/server.csr" -CA "$ca_dir/ca.crt" -CAkey "$ca_dir/ca.key" \
-    -set_serial "0x$(random_hex 16)" -extfile "$config/req.conf" -extensions server -out "$dir/server.crt" 2>/dev/null
-  rm -rf "$config"
-  cp "$ca_dir/ca.crt" "$dir/ca.crt"
-  chmod 644 "$dir/server.crt" "$dir/ca.crt"
-  openssl verify -CAfile "$dir/ca.crt" "$dir/server.crt" >/dev/null
-  echo "Wrote $dir/server.crt and server.key (for: $*), and ca.crt, the certificate Argus checks it against."
+  # The request names nothing that counts: the certificate's names are only those given here.
+  openssl x509 -req -sha256 -days 1095 -in "$csr" -CA "$ca_dir/ca.crt" -CAkey "$ca_dir/ca.key" \
+    -set_serial "0x$(random_hex 16)" -extfile "$config" -extensions server -out "$crt" 2>/dev/null || {
+    rm -f "$config"
+    fail "openssl couldn't sign $csr"
+  }
+  rm -f "$config"
+  chmod 644 "$crt"
+  openssl verify -CAfile "$ca_dir/ca.crt" "$crt" >/dev/null
+  echo "Wrote $crt (for: $*). Copy it, as server.crt, and $ca_dir/ca.crt next to the database's server.key."
 }
 
 # monitoring-setup is the one-shot of Steerhouse's own `monitoring` profile: it creates the role as Steerhouse
@@ -171,7 +184,8 @@ case "$command $#" in
   "secrets 1") secrets "$1" ;;
   "env 1") env_file "$1" ;;
   "ca 1") ca "$1" ;;
-  "cert "*) if [ $# -ge 3 ]; then cert "$@"; else usage; fi ;;
+  "request 1") request "$1" ;;
+  "sign "*) if [ $# -ge 4 ]; then sign "$@"; else usage; fi ;;
   "grafana-role 0") grafana_role ;;
   *) usage ;;
 esac

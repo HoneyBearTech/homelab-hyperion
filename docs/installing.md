@@ -99,7 +99,7 @@ Before the first start, as the `PUID`:`PGID` user, in the checkout:
 1. **Folders and secrets.** `scripts/steerhouse.sh` never replaces a file that exists.
 
    ```sh
-   . ./.env
+   CONFIG_ROOT=$(sed -n 's/^CONFIG_ROOT=//p' .env)
    mkdir -p "$CONFIG_ROOT/steerhouse/config" "$CONFIG_ROOT/steerhouse-postgres/config"
    scripts/steerhouse.sh secrets "$CONFIG_ROOT/steerhouse/secrets"
    scripts/steerhouse.sh env steerhouse.env
@@ -110,19 +110,33 @@ Before the first start, as the `PUID`:`PGID` user, in the checkout:
    the stack's backups, on purpose (anyone with a database backup and the key can decrypt every stored SSH key),
    and a database restored without its key is useless. `admin_password` is the first admin's password (user
    `admin`); change it in Steerhouse after signing in.
-2. **The database's certificate**, from a certificate authority of your own. Make the CA once, on a machine you
-   trust, and keep `ca.key` off this host (in the password manager, say); then issue the server certificate for
-   every name and address Argus' Grafana connects to (it checks them):
+2. **The database's certificate**, from a certificate authority of your own. Each private key stays where it is
+   made: the CA's on a machine you trust (not this host; keep a copy in the password manager), the database's on
+   this host. Only the signing request and the certificates move. Make the CA once, on that machine (with a
+   checkout of this repository):
 
    ```sh
    scripts/steerhouse.sh ca ~/steerhouse-ca     # ca.crt and ca.key, valid 10 years
-   scripts/steerhouse.sh cert ~/steerhouse-ca "$CONFIG_ROOT/steerhouse-postgres/config/tls" \
-     <this host's DNS name> <this host's address>
    ```
 
-   That writes `server.crt` and `server.key` (mode `600`, owned by you: the database runs as `PUID`) and `ca.crt`,
-   the certificate Argus pins. They are backed up with the database. The server certificate is valid for 3 years;
-   to renew it, move the `tls` folder aside, run `cert` again and `docker compose restart steerhouse-postgres`.
+   Here, make the database's key and a signing request:
+
+   ```sh
+   scripts/steerhouse.sh request "$CONFIG_ROOT/steerhouse-postgres/config/tls"   # server.key (600) and server.csr
+   ```
+
+   On the CA's machine, sign it for every name and address Argus' Grafana connects to (it checks them), then copy
+   the certificate back as `server.crt`, with the CA's certificate as `ca.crt`, the one Argus pins:
+
+   ```sh
+   scp <this host>:<CONFIG_ROOT>/steerhouse-postgres/config/tls/server.csr .
+   scripts/steerhouse.sh sign ~/steerhouse-ca server.csr server.crt <this host's address> <this host's DNS name>
+   scp server.crt ~/steerhouse-ca/ca.crt <this host>:<CONFIG_ROOT>/steerhouse-postgres/config/tls/
+   ```
+
+   They are backed up with the database (`server.key` owned by you, mode `600`: the database runs as `PUID`). The
+   certificate is valid for 3 years; to renew it, sign the same `server.csr` again, replace `server.crt` and run
+   `docker compose restart steerhouse-postgres`.
 3. **Settings** in `.env`: `STEERHOUSE_PORT`, `STEERHOUSE_PUBLIC_URL`, `STEERHOUSE_TRUSTED_PROXIES` (the reverse
    proxy's address), `STEERHOUSE_METRICS_PORT`, `STEERHOUSE_POSTGRES_PORT` and `STEERHOUSE_DB_SUBNET`, a private
    range that no network on the host uses yet:

@@ -21,7 +21,10 @@ smoke_prepare() {
   "$root/scripts/steerhouse.sh" secrets "$made/secrets" >/dev/null
   "$root/scripts/steerhouse.sh" env "$made/steerhouse.env" >/dev/null
   "$root/scripts/steerhouse.sh" ca "$made/ca" >/dev/null
-  "$root/scripts/steerhouse.sh" cert "$made/ca" "$made/tls" steerhouse-postgres >/dev/null
+  "$root/scripts/steerhouse.sh" request "$made/tls" >/dev/null
+  "$root/scripts/steerhouse.sh" sign "$made/ca" "$made/tls/server.csr" "$made/tls/server.crt" steerhouse-postgres \
+    >/dev/null
+  cp "$made/ca/ca.crt" "$made/tls/ca.crt"
   # Into CONFIG_ROOT as on the host: owned by PUID:PGID (the user both services run as), the folders mode 0755 and the
   # secrets' and the key's 0700/0600. CONFIG_ROOT belongs to PUID, who may not be the caller: copied as root.
   docker run --rm --network none -v "$config_root:/c" -v "$made:/made:ro" "$busybox" sh -c '
