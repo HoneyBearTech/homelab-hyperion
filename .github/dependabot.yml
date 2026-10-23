@@ -15,6 +15,10 @@ updates:
       # qBittorrent stays on 4.5.5 until the server has moved to this stack, so the move changes one thing at a
       # time; the upgrade is its own pull request, which removes this entry.
       - dependency-name: "*qbittorrent"
+      # Steerhouse's database: a new PostgreSQL major can't open the old one's data (it needs pg_upgrade, or a dump
+      # and a restore), so a major is a pull request of its own, made by hand. Minor releases (18.x) come as usual.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
 
   # The check and test tools (requirements-dev.txt), pinned with hashes.
   - package-ecosystem: "pip"

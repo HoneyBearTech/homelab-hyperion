@@ -13,14 +13,20 @@ setting marked required stops `docker compose` with an error naming it when it's
 | Setting | Required | Example | Meaning |
 | --- | --- | --- | --- |
 | `TZ` | yes | `Etc/UTC` | Time zone (tz database name) for logs and schedules. |
-| `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall and the Minecraft server run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads and incomplete directories. |
-| `CONFIG_ROOT` | yes | `/srv/config` | Host directory with each app's folder: `<app>/config` holds its settings and database (Minecraft's worlds), for `prowlarr`, `qbittorrent`, `heimdall`, `minecraft` and `dozzle`, mounted at the app's data path ([below](#volumes-and-mounts)). Owned by `PUID:PGID`, except `dozzle/config`, owned by root. Holds Prowlarr's indexer credentials and every login: back it up. Never a path inside `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). |
+| `PUID`, `PGID` | yes | `1000` | User and group Prowlarr, qBittorrent, Heimdall, the Minecraft server and Steerhouse's API and database run as; must own those apps' folders under `CONFIG_ROOT` (and Steerhouse's secrets) and be able to write the downloads and incomplete directories. |
+| `CONFIG_ROOT` | yes | `/srv/config` | Host directory with each app's folder: `<app>/config` holds its settings and database (Minecraft's worlds), for `prowlarr`, `qbittorrent`, `heimdall`, `minecraft`, `dozzle`, `steerhouse` and `steerhouse-postgres`, mounted at the app's data path ([below](#volumes-and-mounts)), and `steerhouse/secrets` Steerhouse's secret files ([below](#steerhouses-secret-files)). Owned by `PUID:PGID`, except `dozzle/config`, owned by root. Holds Prowlarr's indexer credentials, Steerhouse's encrypted SSH keys and every login: back it up. Never a path inside `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). |
 | `DOWNLOADS_PATH` | yes | `/srv/downloads` | Where qBittorrent saves downloads. Never backed up by this stack. |
 | `INCOMPLETE_PATH` | yes | `/srv/incomplete` | Where qBittorrent keeps torrents still downloading, mounted at `/incomplete`. Never backed up by this stack. |
 | `DOZZLE_REMOTE_AGENT` | no | `agent-one.example.com:7007` | Dozzle agents on other hosts (`host:port`, comma-separated) whose containers Dozzle also shows. Empty: this host only. |
 | `MINECRAFT_LEVEL_NAME` | yes | `Bedrock level` | The world the server opens: the name of its folder under `worlds/` in `CONFIG_ROOT/minecraft/config`. A new installation starts a new world with this name. |
 | `MINECRAFT_ADDRESS` | yes | `192.0.2.10` | The address players reach this host at (an IP literal, not a hostname). The server hands it to each client with its gameplay port. |
 | `MINECRAFT_EULA` | yes | `TRUE` | Accepts the [Minecraft EULA](https://www.minecraft.net/eula); must be `TRUE` for the server to start. |
+| `STEERHOUSE_PORT` | yes | `8085` | Host port of Steerhouse's web UI, which the reverse proxy serves over HTTPS (with WebSockets). |
+| `STEERHOUSE_PUBLIC_URL` | yes | `https://steerhouse.example.com` | The address people open Steerhouse at, through the reverse proxy: notifications link to it, single sign-on and passkeys depend on it. |
+| `STEERHOUSE_TRUSTED_PROXIES` | yes | `192.0.2.20` | The reverse proxy's address (comma-separated addresses or CIDRs): the only peers whose `X-Forwarded-For` Steerhouse believes (login throttling, audit log). |
+| `STEERHOUSE_METRICS_PORT` | yes | `8002` | Host port of the API's Prometheus metrics, for Argus; answers only with `METRICS_TOKEN`. |
+| `STEERHOUSE_POSTGRES_PORT` | yes | `5432` | Host port of Steerhouse's database, for Argus' Grafana: TLS only, and only the read-only role `grafana_ro`. |
+| `STEERHOUSE_DB_SUBNET` | yes | `172.16.90.0/28` | Address range of `steerhouse-db`, the internal network of Steerhouse's API and database; the app's own database user may connect from there only. A private range no other network on the host uses. |
 
 The Bedrock Dedicated Server's version is not a setting: it is pinned in `compose.yaml` (`VERSION`), like the
 images, and so are its allowlist (on) and its transport (NetherNet, the only one clients use since 1.26.50).
@@ -53,6 +59,37 @@ Read by `scripts/scheduled-backup.sh` (template: [`backup.env.example`](../backu
 
 Only directories named like a backup (`<date>-<time>`) are ever deleted, here or at the remote.
 
+### `steerhouse.env`
+
+Read by the `steerhouse` and `steerhouse-worker` services (template:
+[`steerhouse.env.example`](../steerhouse.env.example)); mode `600`, gitignored. Without it the API refuses to start.
+`scripts/steerhouse.sh env steerhouse.env` writes one with new random values.
+
+| Setting | Meaning |
+| --- | --- |
+| `WORKER_TOKEN` | Shared by the API and the workers (at least 32 characters). In the environment because the workers can't read secret files safely: they run playbooks as other users. |
+| `METRICS_TOKEN` | The bearer token Argus' Prometheus sends for `/metrics` on `STEERHOUSE_METRICS_PORT` (at least 32 characters, unlike the others). Empty = no metrics. |
+
+### Steerhouse's secret files
+
+Docker secrets: files in `CONFIG_ROOT/steerhouse/secrets` (mode `700`, the files `600`, owned by `PUID:PGID`), which
+Compose mounts read-only at `/run/secrets/<name>` in the services that need them. Never committed, and never in the
+stack's backups: keep them in a password manager. `scripts/steerhouse.sh secrets CONFIG_ROOT/steerhouse/secrets`
+writes them all with new random values.
+
+| File | Read by | Meaning |
+| --- | --- | --- |
+| `postgres_password` | `steerhouse-postgres` (first start only) | The password of the database's own user, `steerhouse` |
+| `database_url` | `steerhouse` | `postgresql+psycopg://steerhouse:<postgres_password>@steerhouse-postgres:5432/steerhouse` |
+| `auth_secret_key` | `steerhouse` | Signs sign-in sessions |
+| `credential_encryption_key` | `steerhouse` | Encrypts every stored SSH key, vault password and token (a Fernet key). Without it a backup of the database can't be decrypted |
+| `admin_password` | `steerhouse` (first start only) | The first admin's password; change it in Steerhouse afterwards |
+| `grafana_db_password` | `steerhouse` (`scripts/steerhouse.sh grafana-role` only) | The password of `grafana_ro`, the read-only role Argus' Grafana logs in as |
+
+The database's TLS certificate and key are in its data folder, `CONFIG_ROOT/steerhouse-postgres/config/tls`
+(`server.crt`, `server.key` mode `600`, and `ca.crt`, the certificate Argus checks it against), and are backed up with
+it ([installing.md](installing.md#steerhouse)).
+
 ## Services and ports
 
 | Service | Image | Host port → container | What |
@@ -66,6 +103,10 @@ Only directories named like a backup (`<date>-<time>`) are ever deleted, here or
 | | | 19140–19149 → 19140–19149 (UDP) | NetherNet gameplay, one port per player (`max-players` 10) |
 | autoheal | `willfarrell/autoheal` | none | Restarts unhealthy containers, through the socket proxy |
 | socket proxy | `lscr.io/linuxserver/socket-proxy` | none (internal network only) | Filtered Docker API for autoheal |
+| Steerhouse web UI (`steerhouse-frontend`) | `honeybeartech/steerhouse-frontend` | `STEERHOUSE_PORT` → 8080 | Web UI and API, behind the reverse proxy's HTTPS (LAN only) |
+| Steerhouse API (`steerhouse`) | `honeybeartech/steerhouse-backend` | `STEERHOUSE_METRICS_PORT` → 8002 | Prometheus metrics, only with `METRICS_TOKEN` (for Argus). The API itself (8000) is reached through the web UI; the workers' internal API (8001) is never published |
+| Steerhouse workers (`steerhouse-worker`) | `honeybeartech/steerhouse-backend` | none | Run the playbooks; connect out to the machines they manage |
+| Steerhouse database (`steerhouse-postgres`) | `postgres` | `STEERHOUSE_POSTGRES_PORT` → 5432 | PostgreSQL, TLS 1.3 only from outside, and only the read-only role `grafana_ro` (for Argus' Grafana) |
 
 Ports are published on every host interface. Exact versions and digests are in [`compose.yaml`](../compose.yaml).
 
@@ -88,17 +129,24 @@ in the middle of a database migration or while the Minecraft image downloads its
 | `/config` | `CONFIG_ROOT/heimdall/config` | Heimdall: database and settings |
 | `/data` | `CONFIG_ROOT/minecraft/config` | Minecraft server: worlds, `server.properties`, allowlist and permissions |
 | `/data` | `CONFIG_ROOT/dozzle/config` | Dozzle: settings saved in its UI |
+| `/data` | `CONFIG_ROOT/steerhouse/config` | Steerhouse's API: playbooks, run logs and artifacts, Galaxy roles and collections, git checkouts |
+| `/galaxy` | `CONFIG_ROOT/steerhouse/config/galaxy`, read-only | Steerhouse's workers: the API's Galaxy roles and collections |
+| `/var/lib/postgresql` | `CONFIG_ROOT/steerhouse-postgres/config` | Steerhouse's database (`18/docker`) and its TLS certificate and key (`tls/`) |
+| `/run/secrets/<name>` | `CONFIG_ROOT/steerhouse/secrets/<name>`, read-only | Steerhouse's database and API: their secrets ([above](#steerhouses-secret-files)); never backed up |
 | `/var/run/docker.sock` | the Docker socket, read-only | Dozzle (allowed by label) and the socket proxy (allowed by label) |
 
 The socket proxy and autoheal share the internal network `docker-proxy`, which has no route out and nothing
-published; autoheal also joins the default network, to reach its webhook.
+published; autoheal also joins the default network, to reach its webhook. Steerhouse has networks of its own:
+`steerhouse-web` (web UI and API), `steerhouse-db` (internal, with the fixed range `STEERHOUSE_DB_SUBNET`: API and
+database), `steerhouse-workers` (workers and the API's internal port; not internal, playbooks reach the LAN) and
+`steerhouse-postgres-lan` (the database alone, for its published port).
 
 ## Labels
 
 | Label | Meaning |
 | --- | --- |
 | `autoheal` | `"true"` on every service autoheal may restart when its health check fails (every service but autoheal). |
-| `org.honeybeartech.hyperion.allow.<rule>` | Lets one service break one policy rule; the value is the reason, and must not be empty. Rules: `image`, `digest`, `latest`, `build`, `privileged`, `no-new-privileges`, `cap-drop`, `cap-add`, `host-network`, `host-pid`, `docker-socket`, `devices`, `healthcheck` ([security.md](security.md#policy)). In use: `docker-socket` for Dozzle and the socket proxy, `latest` for autoheal (its maintained image is only published as `latest`, pinned by digest). |
+| `org.honeybeartech.hyperion.allow.<rule>` | Lets one service break one policy rule; the value is the reason, and must not be empty. Rules: `image`, `digest`, `latest`, `build`, `privileged`, `no-new-privileges`, `cap-drop`, `cap-add`, `host-network`, `host-pid`, `docker-socket`, `devices`, `healthcheck` ([security.md](security.md#policy)). In use: `docker-socket` for Dozzle and the socket proxy, `latest` for autoheal (its maintained image is only published as `latest`, pinned by digest), `cap-add` for Steerhouse's worker (`NET_ADMIN`, for its egress filter; the owner agreed on 2026-10-22). |
 | `org.honeybeartech.hyperion.backup.skip` | Container paths (comma-separated, exact) that `scripts/backup.sh` never archives and `scripts/restore.sh` refuses to write, even if a backup lists them. In use: qBittorrent's `/downloads` and `/incomplete`. |
 | `org.honeybeartech.hyperion.backup.exclude` | Paths inside a service's data mounts (comma-separated, exact container paths, at any depth) that `scripts/backup.sh` leaves out of the mount's archive and `scripts/restore.sh` leaves in place. A path that isn't inside one of the service's data mounts, or contains `..` or a pattern character (`*?[\`), makes both fail before anything stops. Not in use. |
 
@@ -113,7 +161,8 @@ published; autoheal also joins the default network, to reach its webhook.
 | `scripts/backup.sh [DIR]` | Archives every service's data mounts (every read-write volume or bind mount except the Docker socket, anonymous volumes and the paths in the service's `backup.skip` label: the downloads directory; a mount inside another mount is archived on its own and left out of the outer archive), `.env` and any `<service>.env` into `DIR` (default `backups/<date>-<time>`, gitignored) with a `MANIFEST`, `NETWORKS` (the address range of each network the stack uses but doesn't create; this stack has none, so only the header), `VERSION` (the checkout's `git describe`) and `SHA256SUMS`, all mode `600`. Each service is stopped only while its own mounts are copied and started again (with any service Compose stopped along with it) before the copies are compressed (with `pigz` when it's installed, else `gzip`). Leaves out the paths a service's `org.honeybeartech.hyperion.backup.exclude` label lists. If the pull agent keeps state for this stack (`${HOMELAB_PULL_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/homelab-pull}/hyperion`), first takes its `lock` with `flock` (waiting up to 30 minutes for a deploy to finish) and holds it until it exits. If stopping a service fails while its container is still on its way down (a process stuck writing to a network share can outlast Docker's stop), it waits up to `BACKUP_STOP_WAIT` seconds (default 120) for the container to exit and carries on; if it still runs then, the backup fails, and the services are started again only after a second wait. Fails, naming them, if any service that was running when it began isn't running again at the end. Exit 0 = backup complete |
 | `scripts/scheduled-backup.sh` | Runs `scripts/backup.sh` into `BACKUP_DIR/<date>-<time>`, copies it to `BACKUP_REMOTE` with rsync (`SHA256SUMS` last), deletes all but the newest `BACKUP_REMOTE_KEEP` there and `BACKUP_KEEP` here, and reports to `BACKUP_PING_URL` ([`backup.env`](#backupenv)). Run nightly at 04:30 by the systemd user units in `deploy/systemd/` |
 | `scripts/restore.sh [--yes] DIR [SERVICE...]` | Verifies `DIR/SHA256SUMS`, checks the `MANIFEST`, creates missing containers, asks for confirmation (unless `--yes`), stops the services, recreates a service's container if it predates `compose.yaml`, replaces the contents of each listed mount with its archive (owners and modes kept), and starts what was running. Each archive goes to what the service mounts at that container path now, whatever the `MANIFEST` names as its source (so a backup of the old data directories or of Dozzle's old volume restores into the folders under `CONFIG_ROOT`), and a missing folder is created. Writes only mounts the service still has read-write; never the Docker socket, a path in the service's `backup.skip` label, another mount inside the one it restores, or a path in its `backup.exclude` label. Holds the pull agent's lock as `scripts/backup.sh` does |
-| `make smoke` | `scripts/smoke-test.sh`: starts every service under a separate Compose project with throwaway directories and app folders under a throwaway `CONFIG_ROOT` (owned by `PUID`:`PGID` with mode 0755, as on the host; Dozzle's created by Docker, owned by root) and no published ports, waits until all are healthy, round-trips a backup and restore over every data mount, checks that an app's data restores through a container made from older settings into its folder under `CONFIG_ROOT`, removed beforehand, with its owner and mode, that excluded mounts and paths were neither archived nor overwritten and that the backup has `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the copy and the pruning, checks that autoheal restarts a container that turns unhealthy, then removes what it created. Exit 0 = all healthy and restored |
+| `scripts/steerhouse.sh secrets DIR` / `env FILE` / `ca DIR` / `cert CA_DIR DIR NAME...` / `grafana-role` | Writes Steerhouse's secret files, `steerhouse.env`, a CA, or the database's certificate and key (never replacing a file), or creates the read-only role `grafana_ro` in the running stack (again: sets its password to `grafana_db_password`) ([installing.md](installing.md#steerhouse)) |
+| `make smoke` | `scripts/smoke-test.sh`: starts every service under a separate Compose project with throwaway directories and app folders under a throwaway `CONFIG_ROOT` (owned by `PUID`:`PGID` with mode 0755, as on the host; Dozzle's created by Docker, owned by root) and no published ports, waits until all are healthy, round-trips a backup and restore over every data mount, checks that an app's data restores through a container made from older settings into its folder under `CONFIG_ROOT`, removed beforehand, with its owner and mode, that excluded mounts and paths were neither archived nor overwritten and that the backup has `NETWORKS` and `VERSION`, runs the scheduled backup against a stand-in backup server and checks the copy and the pruning, checks that autoheal restarts a container that turns unhealthy, then removes what it created. Its stack-specific steps are in `scripts/smoke-stack.sh`: Steerhouse's throwaway secrets and certificate, made with `scripts/steerhouse.sh`, and checks, before and after the restore, that `grafana_ro` reads the `analytics` views over TLS and nothing else, that connections without TLS and every other login from outside `steerhouse-db` are refused, that `/metrics` needs `METRICS_TOKEN`, and that the worker is ready and sees the API's Galaxy folder. Exit 0 = all healthy and restored |
 
 ## Outbound connections
 
@@ -122,7 +171,11 @@ From the host: the image registries (GitHub Container Registry, Docker Hub, linu
 APIs; qBittorrent to BitTorrent trackers, peers and the DHT; the Minecraft server image downloads the pinned
 Bedrock Dedicated Server from Minecraft's website on start; Heimdall to the apps it shows live stats for, if
 configured; Prowlarr and qBittorrent may check for updates (which this stack doesn't apply). Dozzle to the local Docker
-API and to the Dozzle agents named in `DOZZLE_REMOTE_AGENT`; autoheal only to the socket proxy.
+API and to the Dozzle agents named in `DOZZLE_REMOTE_AGENT`; autoheal only to the socket proxy. Steerhouse's workers to
+the machines its playbooks manage (SSH) and whatever the playbooks fetch (never the API's own address or cloud
+metadata: the worker's egress filter); its API to Ansible Galaxy, the git repositories and the single sign-on, mail
+and notification services it is configured with. Into the stack from Argus (another host): Prometheus scrapes
+`STEERHOUSE_METRICS_PORT`, Grafana reads `STEERHOUSE_POSTGRES_PORT` as `grafana_ro`.
 
 The scheduled backup talks to `BACKUP_REMOTE` (rsync, usually over SSH) and `BACKUP_PING_URL`, if they are set.
 

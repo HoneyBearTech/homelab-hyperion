@@ -11,6 +11,8 @@ appdata/
 data/
 media/
 downloads/
+# Steerhouse's secret files (docs/installing.md#steerhouse), should a copy end up in the checkout
+secrets/
 
 # Backups written by scripts/backup.sh: they hold the services' databases and logins
 backups/
