@@ -97,6 +97,17 @@ qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the ho
   1.2, which never maps files either and reads faster when seeding a lot, upstream says) are the fallback if
   seeding suffers, at the cost of BitTorrent v2 torrents.
 
+### Steerhouse and its PostgreSQL
+
+Steerhouse's two images (`honeybeartech/steerhouse-backend`, which the API and the workers share, and
+`-frontend`) are published for `linux/amd64` only, signed, and scanned by Steerhouse's own release workflow;
+Dependabot bumps both together. A new Steerhouse version migrates its database when the API starts: read its
+release notes, and run `scripts/steerhouse.sh grafana-role` afterwards so that `grafana_ro` can read any new
+`analytics` view. Its database runs the official `postgres` image on a minor tag (`18.6-trixie`): Dependabot proposes
+the minors, which open the same data, and ignores the majors, because PostgreSQL 19 can't open version 18's data
+directory. A major upgrade is a pull request by hand, with a dump of the old database and a restore into the new
+one (or `pg_upgrade`), after a backup.
+
 ## Policy for vulnerabilities in dependencies
 
 Known vulnerabilities are found through Dependabot alerts, the services' and images' own advisories, and a
@@ -130,6 +141,8 @@ was dismissed.
 | Heimdall `version-v2.8.3` (build `ls368`) | 11 | 11 | **Wait for upstream.** PHP libraries Heimdall vendors |
 | Dozzle `v11.3.2` | 1 | 1 | **Fixed by a bump** to `v11.3.4`, built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`; a scan of `v11.3.4` finds nothing |
 | autoheal, socket-proxy | 0 | 0 | |
+| Steerhouse backend and frontend `0.10.1` | 0 | 0 | Scanned with the weekly scan's settings before they were added (2026-10-22) |
+| PostgreSQL `18.6-trixie` (Steerhouse's database) | 26 (1) | 26 | **Not reachable.** Every finding is in the Go standard library of `gosu` 1.24.6, which the image's entrypoint only runs when it starts as root, to drop to the `postgres` user; this stack runs it as `PUID`:`PGID`, so `gosu` never runs. Fixed when the image ships a newer `gosu` |
 
 **Every critical finding:**
 

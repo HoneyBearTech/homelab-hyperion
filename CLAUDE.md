@@ -77,7 +77,8 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   and proven by the smoke test (docs/security.md#hardening). A capability outside the default set needs
   `allow.cap-add` and the owner's agreement. `scripts/check_compose.py` enforces all of this in CI and in the
   release workflow. Read-only root filesystems (`read_only: true` + `tmpfs` only, no image-specific env flags) for
-  Dozzle, Minecraft, autoheal, the socket proxy and Steerhouse's API, worker and database; the linuxserver.io (s6)
+  Dozzle, Minecraft, autoheal, the socket proxy and Steerhouse's API (with `HOME=/tmp` for Ansible's `~/.ansible`),
+  worker and database; the linuxserver.io (s6)
   images stay writable (their init runs from `/run`, and a tmpfs there is noexec), and so does Steerhouse's web UI
   (its entrypoint writes the trusted-proxy config into `/etc/nginx/conf.d`). Keep it that way when adding a service.
 - **Steerhouse is security-critical** (hosted here, not on Ares, because its images are amd64 only; owner

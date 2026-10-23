@@ -338,6 +338,9 @@ services:
       TRUSTED_PROXY_HOSTS: steerhouse-frontend
       # Listens only while METRICS_TOKEN (steerhouse.env) is set; published below, for Argus.
       METRICS_HOST: 0.0.0.0
+      # Ansible, which the API loads at start and runs for Galaxy installs, keeps its working files in ~/.ansible:
+      # in memory, as the image's home directory is on the read-only root (and isn't PUID's unless PUID is 1000).
+      HOME: /tmp
     # WORKER_TOKEN and METRICS_TOKEN: the workers can't read secret files safely, so the token they share with the API
     # is in the environment (Steerhouse's docs/installing.md). Missing, the API refuses to start.
     env_file:
