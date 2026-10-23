@@ -55,7 +55,9 @@ have one, so check the release notes instead.
 Copy any `<service>.env` from the backup's `env/` the same way (mode `600`). Steerhouse's secret files aren't in the
 backup, on purpose: put them back into `CONFIG_ROOT/steerhouse/secrets` (mode `700`, the files `600`) from the
 password manager before the restore, above all `credential_encryption_key`, without which Steerhouse can't decrypt
-any credential in its restored database ([installing.md](installing.md#steerhouse)). Edit `.env` if the new host's
+any credential in its restored database ([installing.md](installing.md#steerhouse)). Dozzle's certificate and key
+aren't in it either: put them back into `CONFIG_ROOT/dozzle/certs` from the password manager, owned by root
+([installing.md](installing.md#dozzles-certificate)), or the restore can't create Dozzle's container. Edit `.env` if the new host's
 paths differ (but keep the downloads' container path). A backup taken before the apps' data moved under
 `CONFIG_ROOT` has an `.env` without it: add `CONFIG_ROOT` (see `.env.example`) and drop the old per-app path
 settings; the restore puts each archive into the app's folder under `CONFIG_ROOT` all the same. Create the apps'
@@ -88,6 +90,7 @@ its worlds: check out that release or a newer one.
   units: set them up again as [installing.md](installing.md#scheduled-backups) describes; `backup.env` comes back
   from the backup's `env/`).
 - **Steerhouse's secrets**: they live in the password manager, not in the backup (see above).
+- **Dozzle's certificate and key** (`CONFIG_ROOT/dozzle/certs`): in the password manager too (see above).
 - **Other machines' view of this one**: the media apps' settings, reverse proxy hosts, DNS records, router port
   forwards, anything that reaches Hyperion by address (Argus' Prometheus and Grafana, for Steerhouse).
 - **Services from other projects** on the same host: restore them from their own backups.
