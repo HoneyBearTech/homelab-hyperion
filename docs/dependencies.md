@@ -122,13 +122,17 @@ image contains or runs, the pinned image was inspected (its package database, bi
 than assumed. The alerts stay open in code scanning, so each closes by itself when an update ships the fix; none
 was dismissed.
 
+**Rescan after the upgrades** (`main` at `bc0b68b`, later on 2026-10-22, with qBittorrent 5.3.0 and Dozzle v11.3.4
+deployed): **181 open alerts, 10 critical and 171 high**. Every qBittorrent and Dozzle alert closed; what remains is
+Prowlarr (128, all 10 critical), the Minecraft image (39) and Heimdall (14: the 11 below and 3 new nginx findings).
+
 | Image | Open alerts (critical) | Distinct findings | Action |
 | --- | --- | --- | --- |
-| qBittorrent `4.5.5-r0-ls292` | 173 (8) | 78 | **Fixed by the upgrade** to 5.3.0 (`version-5.3.0_v2.1.2`, build `ls484`) once the maintainer lifted the hold on 2026-10-22: a scan of the new image with the weekly scan's settings finds nothing ([qBittorrent](#qbittorrent)) |
+| qBittorrent `4.5.5-r0-ls292` | 173 (8), 0 after the rescan | 78 | **Fixed by the upgrade** to 5.3.0 (`version-5.3.0_v2.1.2`, build `ls484`) once the maintainer lifted the hold on 2026-10-22: a scan of the new image with the weekly scan's settings finds nothing ([qBittorrent](#qbittorrent)) |
 | Prowlarr `version-2.6.5.5623` (build `ls165`) | 128 (10) | 19 | **Wait for upstream.** Every finding is in the .NET 8.0.27 runtime Prowlarr bundles, fixed in .NET 8.0.32 (2026-10-13); no Prowlarr build ships a newer runtime yet |
 | Minecraft image `2026.10.1` | 39 | 18 | **Wait for upstream.** The Go standard library in the image's helper tools, and Debian's curl |
-| Heimdall `version-v2.8.3` (build `ls368`) | 11 | 11 | **Wait for upstream.** PHP libraries Heimdall vendors |
-| Dozzle `v11.3.2` | 1 | 1 | **Fixed by a bump** to `v11.3.4`, built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`; a scan of `v11.3.4` finds nothing |
+| Heimdall `version-v2.8.3` (build `ls368`) | 11, 14 after the rescan | 11, 14 after the rescan | **Wait for upstream.** PHP libraries Heimdall vendors, and (new at the rescan) the image's nginx |
+| Dozzle `v11.3.2` | 1 (0 after the rescan) | 1 | **Fixed by a bump** to `v11.3.4`, built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`; a scan of `v11.3.4` finds nothing |
 | autoheal, socket-proxy | 0 | 0 | |
 
 **Every critical finding:**
@@ -180,15 +184,29 @@ was dismissed.
   Heimdall's own code renders no Markdown (checked in the image); php_codesniffer is a development tool the web
   app never runs; Heimdall calls the apps it links to with Guzzle but allows or blocks nothing by host name. Fixed
   when Heimdall updates its dependencies; its UI stays on the LAN.
+- **Heimdall's nginx 1.30.4** (3, new at the rescan): CVE-2026-15176 (a heap overflow that needs an `alias` together
+  with a regex `rewrite`) and CVE-2026-93479 (in regex matching inside a `map`) don't apply: the image's nginx
+  configuration has no `alias` and no `rewrite`, and its one `map` (`$http_upgrade`, for websockets) matches fixed
+  strings only (checked in the image). CVE-2026-97205 (`ngx_http_core_module`, no details published yet) is
+  reachable from the LAN, where Heimdall's UI stays. Fixed when linuxserver.io rebuilds the image on a patched nginx;
+  Dependabot proposes that rebuild.
 
-**Older than 60 days.** These findings have had a fix public for more than 60 days (as of 2026-10-22), so they keep
-the OpenSSF Best Practices criterion on fixing vulnerabilities within 60 days unmet: qBittorrent 4.5.5's until the
-upgrade to 5.3.0 (at least those from 2023 to 2025 that apply, its own CVE-2024-51774 among them); six of Prowlarr's (fixed in .NET on
-2026-07-14 and 2026-08-11, in no Prowlarr release yet); the Go findings in the Minecraft image's `set-property`
-(11) and `entrypoint-demoter` (8), fixed in Go 1.26.4 to 1.26.6 (2026-06-02 to 2026-08-13); and six of Heimdall's
-(advisories of 2026-08-03 and 2026-08-06). The other images' remaining findings reach 60 days between 2026-10-31
-and 2026-12-18 unless upstream ships the fixes first; Prowlarr's .NET 8.0.32 findings, both critical ones included,
-on 2026-12-12.
+**Older than 60 days.** After the upgrade to qBittorrent 5.3.0, these findings have had a fix public for more than
+60 days (as of 2026-10-22). None of them is in this repository's own code, which has no known vulnerabilities; all
+are in third-party images that are already on their newest upstream release, so no update is available to apply.
+Each was assessed against the pinned image:
+
+| Image | Findings | Fix public since | Verdict |
+| --- | --- | --- | --- |
+| Prowlarr | 6 in the .NET 8.0.27 runtime (CVE-2026-47302, CVE-2026-50524, CVE-2026-50528, CVE-2026-50651, CVE-2026-57108, CVE-2026-62901) | .NET 8.0.29 (2026-07-14) and 8.0.30 (2026-08-11) | Reachable only from the LAN, through a web UI and API that require a login (CVE-2026-50651 also through the indexers Prowlarr connects to). No Prowlarr release ships a patched runtime yet; the update is applied as soon as one does (see the watch below) |
+| Minecraft image | Go standard library in `set-property` (11) and `entrypoint-demoter` (8) | Go 1.26.4 to 1.26.6 (2026-06-02 to 2026-08-13) | Not reachable: neither tool listens on the network or reads untrusted input (they write `server.properties` and switch users at start) |
+| Heimdall | 6 in vendored PHP libraries (CVE-2026-69246 in Guzzle; CVE-2026-71488, GHSA-g2gp-3wwq-f4ph, GHSA-jfm3-95jq-q3rf, GHSA-mh25-x5hq-wrqp in league/commonmark; CVE-2026-67434 in php_codesniffer) | advisories of 2026-08-03 and 2026-08-06 | Not reachable: Heimdall renders no Markdown, never runs php_codesniffer, and allows or blocks nothing by host name |
+
+This is the basis for the OpenSSF Best Practices answer on fixing vulnerabilities within 60 days: the project fixes
+what it can (it upgraded qBittorrent and Dozzle for exactly this), keeps every image on its newest release, and
+records each finding it can't fix with a verdict. The other images' remaining findings reach 60 days between
+2026-10-31 and 2026-12-18 unless upstream ships the fixes first; Prowlarr's .NET 8.0.32 findings, both critical ones
+included, on 2026-12-12. Each is reassessed at the monthly re-triage.
 
 **Watch: Prowlarr's .NET runtime.** Prowlarr's releases lag the runtime they bundle (its newest ships .NET 8.0.27,
 from May 2026), and .NET 8 is supported only until 2026-11-10. If no Prowlarr release on a patched runtime
