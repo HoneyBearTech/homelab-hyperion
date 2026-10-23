@@ -5,16 +5,15 @@ version: 2
 # server unattended with the nightly backup behind it. An update Dependabot can't classify waits for the
 # maintainer.
 updates:
-  # The stack's images in compose.yaml (version tag and digest).
+  # The stack's images in compose.yaml (version tag and digest). qBittorrent's tag also names its libtorrent
+  # (version-5.3.0_v2.1.2), which Dependabot can't read as a version: it proposes that tag's rebuilds only, and a
+  # new qBittorrent version is bumped by hand (docs/dependencies.md#qbittorrent).
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
     assignees: ["HoneyBearTech"]
     ignore:
-      # qBittorrent stays on 4.5.5 until the server has moved to this stack, so the move changes one thing at a
-      # time; the upgrade is its own pull request, which removes this entry.
-      - dependency-name: "*qbittorrent"
       # Steerhouse's database: a new PostgreSQL major can't open the old one's data (it needs pg_upgrade, or a dump
       # and a restore), so a major is a pull request of its own, made by hand. Minor releases (18.x) come as usual.
       - dependency-name: "postgres"
