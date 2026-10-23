@@ -65,14 +65,24 @@ cleanup() {
 networks=()
 trap cleanup EXIT
 
-# An address range no Docker network uses now: Docker picks it for a network made and removed at once.
+# An address range (a /28) that no Docker network on the host uses, nor any range given as an argument, from
+# 172.16.0.0/16: outside Docker's default address pools (172.17-31.0.0/16, 192.168.0.0/16), so a network Compose
+# creates meanwhile can't be given it.
 free_subnet() {
-  local probe=${project}_subnet-probe subnet
-  docker network create --internal "$probe" >/dev/null
-  subnet=$(docker network inspect --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' "$probe")
-  docker network rm "$probe" >/dev/null
-  echo "$subnet"
+  # shellcheck disable=SC2046 # one network id per word
+  docker network inspect --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' $(docker network ls -q) |
+    python3 -I -c '
+import ipaddress, sys
+used = [ipaddress.ip_network(s) for s in sys.stdin.read().split() + sys.argv[1:] if "." in s]
+for n in range(255, -1, -1):
+    candidate = ipaddress.ip_network(f"172.16.{n}.0/28")
+    if not any(candidate.overlaps(u) for u in used):
+        print(candidate)
+        break
+else:
+    sys.exit("no free /28 in 172.16.0.0/16")' "$@"
 }
+subnets=()
 
 data_dirs=()
 while IFS= read -r line; do
@@ -88,7 +98,10 @@ while IFS= read -r line; do
     *_VOLUME) value=${project}_$(echo "$key" | tr 'A-Z_' 'a-z-') ;;
     *_NETWORK) value=${project}_$(echo "$key" | tr 'A-Z_' 'a-z-') ;;
     # A network's address range, which the stack fixes (for an access list), mustn't overlap one already on the host.
-    *_SUBNET) value=$(free_subnet) ;;
+    *_SUBNET)
+      value=$(free_subnet "${subnets[@]+"${subnets[@]}"}")
+      subnets+=("$value")
+      ;;
     # A license the operator accepts in .env (left empty in .env.example): accepted for this throwaway run only,
     # so the service it gates can be tested. The maintainer agreed to this for the Minecraft EULA.
     *_EULA) value=TRUE ;;

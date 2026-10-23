@@ -426,7 +426,10 @@ services:
         required: false
     volumes:
       # The API's Galaxy roles and collections; the API creates the folder when it starts, before any worker.
-      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/config/galaxy:/galaxy:ro
+      - type: bind
+        source: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/config/galaxy
+        target: /galaxy
+        read_only: true
     networks:
       - steerhouse-workers
     depends_on:

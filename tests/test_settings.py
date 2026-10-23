@@ -39,6 +39,13 @@ STEERHOUSE_SECRETS = {
 }
 
 
+def mount(volume: str | dict) -> str:
+    """A volume as Compose's short syntax (``source:target``, ``:ro`` when read-only), from either syntax."""
+    if isinstance(volume, str):
+        return volume
+    return f"{volume['source']}:{volume['target']}" + (":ro" if volume.get("read_only") else "")
+
+
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
@@ -59,12 +66,12 @@ def test_every_setting_is_in_env_example_and_interfaces() -> None:
 def test_each_app_keeps_its_data_in_its_folder_under_config_root() -> None:
     services = compose()["services"]
     for app, path in APPS.items():
-        assert f"{CONFIG_ROOT}/{app}/config:{path}" in services[app]["volumes"]
+        assert f"{CONFIG_ROOT}/{app}/config:{path}" in [mount(v) for v in services[app]["volumes"]]
 
 
 def test_every_data_mount_comes_from_the_apps_folder_under_config_root() -> None:
     for name, service in compose()["services"].items():
-        for volume in service.get("volumes") or []:
+        for volume in map(mount, service.get("volumes") or []):
             if volume in OTHER_MOUNTS or volume in SHARED_MOUNTS.get(name, set()):
                 continue
             assert re.fullmatch(re.escape(f"{CONFIG_ROOT}/{name}/") + r"[a-z0-9-]+:/[^:]+", volume), (
@@ -77,14 +84,15 @@ def test_no_named_volumes() -> None:
     assert "volumes" not in config
     for name, service in config["services"].items():
         for volume in service.get("volumes") or []:
-            assert volume.startswith(("/", "${")), f"{name} mounts a named volume: {volume}"
+            assert isinstance(volume, str) or volume["type"] == "bind", f"{name} mounts a named volume: {volume}"
+            assert mount(volume).startswith(("/", "${")), f"{name} mounts a named volume: {volume}"
 
 
 def test_no_path_points_into_docker_volumes() -> None:
     settings = re.findall(r"^[A-Z][A-Z0-9_]*=(.*)$", read(".env.example"), re.MULTILINE)
     assert not [value for value in settings if "/var/lib/docker" in value]
     for name, service in compose()["services"].items():
-        for volume in service.get("volumes") or []:
+        for volume in map(mount, service.get("volumes") or []):
             assert "/var/lib/docker" not in volume, f"{name} mounts {volume}"
 
 

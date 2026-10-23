@@ -22,7 +22,8 @@ user in the `docker` group, and the host ports the services use free ([installin
    In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directories), `DOWNLOADS_PATH`,
    `INCOMPLETE_PATH` (qBittorrent's torrents still downloading), `CONFIG_ROOT` (the directory that holds each app's
    folder, `<app>/config`, with its settings and data), `MINECRAFT_LEVEL_NAME` (the world's name),
-   `MINECRAFT_ADDRESS` (this host's LAN address, for the players), and `MINECRAFT_EULA=TRUE` once you've read and accepted the [Minecraft EULA](https://www.minecraft.net/eula). Never
+   `MINECRAFT_ADDRESS` (this host's LAN address, for the players), the `STEERHOUSE_*` settings
+   ([installing.md](installing.md#steerhouse)), and `MINECRAFT_EULA=TRUE` once you've read and accepted the [Minecraft EULA](https://www.minecraft.net/eula). Never
    point a path into `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). Every setting is
    described in [interfaces.md](interfaces.md#settings).
 
@@ -34,10 +35,13 @@ user in the `docker` group, and the host ports the services use free ([installin
 
    ```sh
    . ./.env && mkdir -p "$DOWNLOADS_PATH" "$INCOMPLETE_PATH"
-   for app in prowlarr qbittorrent heimdall minecraft; do
+   for app in prowlarr qbittorrent heimdall minecraft steerhouse steerhouse-postgres; do
      mkdir -p "$CONFIG_ROOT/$app/config"
    done
    ```
+
+   Then Steerhouse's secrets, tokens and database certificate, as [installing.md](installing.md#steerhouse) shows
+   (`scripts/steerhouse.sh`).
 
 4. **Check and start.**
 
@@ -52,6 +56,8 @@ user in the `docker` group, and the host ports the services use free ([installin
    change it. In Prowlarr, set a login, add your indexers and connect the media apps. The Minecraft server's
    allowlist is on: until you name the players, nobody can join. Add each one with
    `docker compose exec minecraft send-command allowlist add "<gamer tag>"`. Players add the server by this host's
-   address and port 19132; it doesn't appear in their LAN list.
+   address and port 19132; it doesn't appear in their LAN list. For Steerhouse, create the role Argus' Grafana
+   uses (`scripts/steerhouse.sh grafana-role`), put it behind the reverse proxy and sign in as `admin`
+   ([installing.md](installing.md#steerhouse)).
 
 To upgrade later, follow [upgrading.md](upgrading.md); it starts with a backup.
