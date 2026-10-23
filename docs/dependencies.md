@@ -145,7 +145,7 @@ Prowlarr (128, all 10 critical), the Minecraft image (39) and Heimdall (14: the 
 | Heimdall `version-v2.8.3` (build `ls368`) | 11, 14 after the rescan | 11, 14 after the rescan | **Wait for upstream.** PHP libraries Heimdall vendors, and (new at the rescan) the image's nginx |
 | Dozzle `v11.3.2` | 1 (0 after the rescan) | 1 | **Fixed by a bump** to `v11.3.4`, built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`; a scan of `v11.3.4` finds nothing |
 | autoheal, socket-proxy | 0 | 0 | |
-| Steerhouse backend and frontend `0.10.1` | 0 | 0 | Scanned with the weekly scan's settings before they were added (2026-10-22) |
+| Steerhouse backend and frontend `0.11.0` | 0 | 0 | Scanned with the weekly scan's settings (Trivy 0.75.0, `linux/amd64`, HIGH and CRITICAL, fixed only) before the bump from `0.10.1` (2026-10-23) |
 | PostgreSQL `18.6-trixie` (Steerhouse's database) | 26 (1) | 26 | **Not reachable.** Every finding is in the Go standard library of `gosu` 1.24.6, which the image's entrypoint only runs when it starts as root, to drop to the `postgres` user; this stack runs it as `PUID`:`PGID`, so `gosu` never runs. Fixed when the image ships a newer `gosu` |
 
 **Every critical finding:**

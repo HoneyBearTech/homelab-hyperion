@@ -132,6 +132,11 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Changed
 
+- Steerhouse 0.11.0 replaces 0.10.1 (backend and frontend images, pinned by tag and digest; the digests are the ones
+  in the release's signed `images.txt`). It fixes vault-encrypted values in a host's vars or a run's extra vars,
+  which reached Ansible undecrypted (an encrypted `ansible_become_password` was refused as the sudo password), and
+  adds run counts for dashboards (`GET /api/stats`, a `stats` API key preset). No database migrations and no new
+  settings; Steerhouse's own `deploy/compose.yaml` changed only its image tags.
 - qBittorrent 5.3.0 replaces 4.5.5 (the maintainer lifted the hold on qBittorrent on 2026-10-22), as linuxserver.io's
   `version-5.3.0_v2.1.2` tag (build `5.3.0_v2.1.2-ls484`, libtorrent 2.1.2), with the same capabilities, ports,
   paths, limits and health check. libtorrent 2.1 reads and writes the files with `pread`/`pwrite` instead of mapping

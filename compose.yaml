@@ -232,7 +232,7 @@ services:
       - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/minecraft/config:/data
 
   # --- Steerhouse (Ansible playbooks from a web UI) -------------------------------------------------------------
-  # From Steerhouse's own deploy/compose.yaml (v0.10.1), without its `monitoring` profile: Argus, on another host,
+  # From Steerhouse's own deploy/compose.yaml (v0.11.0), without its `monitoring` profile: Argus, on another host,
   # scrapes the API's metrics and reads the read-only `analytics` views over the LAN. Steerhouse holds the SSH keys
   # and vault passwords of the machines it manages: only the database and the API get its secrets (Docker secrets,
   # files under CONFIG_ROOT/steerhouse/secrets, never backed up with the data), the workers none.
@@ -311,7 +311,7 @@ services:
   # with METRICS_TOKEN (steerhouse.env); the internal worker API (8001) is never published.
   steerhouse:
     <<: *hardened
-    image: honeybeartech/steerhouse-backend:0.10.1@sha256:f811277a1e61c461f10c8749248e0a97423ea401f21f8a568d1fbff9fef1cc41
+    image: honeybeartech/steerhouse-backend:0.11.0@sha256:38db591deefde311e1f265539934d1b68eb3c9077c1d491b42798fae31fe5809
     container_name: steerhouse
     # Its images are published for linux/amd64 only (elsewhere, such as on a Mac, they run emulated).
     platform: linux/amd64
@@ -385,7 +385,7 @@ services:
   # has no secrets and no database, only the API's internal port and the Galaxy content, read-only.
   steerhouse-worker:
     <<: *hardened
-    image: honeybeartech/steerhouse-backend:0.10.1@sha256:f811277a1e61c461f10c8749248e0a97423ea401f21f8a568d1fbff9fef1cc41
+    image: honeybeartech/steerhouse-backend:0.11.0@sha256:38db591deefde311e1f265539934d1b68eb3c9077c1d491b42798fae31fe5809
     container_name: steerhouse-worker
     # Its images are published for linux/amd64 only (elsewhere, such as on a Mac, they run emulated).
     platform: linux/amd64
@@ -450,7 +450,7 @@ services:
   # trusted-proxy settings (TRUSTED_PROXIES) into /etc/nginx/conf.d when it starts.
   steerhouse-frontend:
     <<: *hardened
-    image: honeybeartech/steerhouse-frontend:0.10.1@sha256:3e7ddd8ba43fe5694c963c643310dcf3ccfc78914599f4fad02b477f0f030742
+    image: honeybeartech/steerhouse-frontend:0.11.0@sha256:e4519468d856ee752e17cf4c5478f8230ec9644b929ad2ce551d28117568ac4c
     container_name: steerhouse-frontend
     # Its images are published for linux/amd64 only (elsewhere, such as on a Mac, they run emulated).
     platform: linux/amd64
