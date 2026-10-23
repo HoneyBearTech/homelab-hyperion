@@ -49,7 +49,8 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - **Every image is pinned as `name:tag@sha256:<digest>`.** Never `latest`, never tag-only (autoheal is the
   documented `allow.latest` exception, as on atlas). Dependabot (`docker-compose` ecosystem) updates tag and digest
   together. linuxserver.io images use their `version-<app version>` tag (socket-proxy its bare version), never the
-  `-lsNNN` build tag: Dependabot can't follow those (qBittorrent, held at 4.5.5, keeps its build tag). Patch, minor
+  `-lsNNN` build tag: Dependabot can't follow those. qBittorrent's (`version-5.3.0_v2.1.2`) also names its libtorrent,
+  so Dependabot only proposes its rebuilds (see the qBittorrent rule below). Patch, minor
   and major updates, and image rebuilds (same tag, new digest), auto-merge once the required checks pass (owner
   2026-10-14); only an update Dependabot can't classify waits for the owner. Every merge deploys, the automatic
   ones included (see Deploys), so a major that migrates data one way reaches the server unattended: the nightly
@@ -79,8 +80,14 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
   service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.
 - **Every service has a health check** and the `autoheal: "true"` label (autoheal itself excepted, as on atlas).
-- **qBittorrent stays on 4.5.5** until after the cutover (Dependabot ignores it); the 5.x upgrade is its own PR,
-  backup first, and removes the ignore entry.
+- **qBittorrent's hold was lifted** (owner 2026-10-22; it was held at 4.5.5 from 2026-10-14): it runs 5.3.0 on
+  libtorrent 2.1, and Dependabot no longer ignores it. Its downloads may be on a network share, so it must never
+  memory-map them: keep a build on libtorrent 2.1 or newer (its tag names the libtorrent; pread/pwrite disk I/O by
+  default) and never pin a floating tag (`5.3.0`, `latest`, `libtorrentv1`), whose rebuilds can change the
+  libtorrent unattended. Dependabot can't read `version-<qBittorrent>_v<libtorrent>` as a version, so it proposes
+  only rebuilds of the pinned tag; a new qBittorrent version is a pull request by hand: read its release notes (its
+  settings can migrate one way), check the libtorrent version, back up first. The disk I/O type is a qBittorrent
+  setting (Advanced → Disk IO type: Default or Pread/pwrite), not something compose can set.
 - **Never change the live server** (Hyperion) without the owner asking: merges only as **Merging** says, no
   `docker compose up`, no edits to service data, qBittorrent torrents, Prowlarr indexers, Minecraft worlds, or
   Portainer stacks. Read-only inspection (`docker ps`, `docker inspect`) only when asked.

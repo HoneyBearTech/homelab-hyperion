@@ -18,7 +18,8 @@ file changes with them, in the same pull request.
   paths.
 - Done: Hyperion follows `main` with a pull agent, so a merge deploys within minutes, Dependabot's automatic merges
   included ([upgrading.md](upgrading.md#following-main)); releases stay as signed, verified snapshots.
-- Held: upgrading qBittorrent from 4.5.5 to 5.x, in its own pull request, when the maintainer decides to.
+- Done: qBittorrent upgraded from 4.5.5 to 5.3.0 (libtorrent 2.1), in its own pull request, once the maintainer
+  lifted the hold on 2026-10-22.
 
 ## Next: safe upgrades and rebuilds
 
@@ -39,8 +40,8 @@ file changes with them, in the same pull request.
 - Branch protection on `main` with required checks; private vulnerability reporting; secret scanning with
   push protection.
 - Done: **OSPS Baseline** Levels 1 and 2. Next: the OpenSSF Best Practices **Passing** and **Silver** badges,
-  which wait on known vulnerabilities in the images being fixed within 60 days: the qBittorrent upgrade above,
-  and upstream releases for the rest ([dependencies.md](dependencies.md#current-findings)).
+  which wait on known vulnerabilities in the images being fixed within 60 days: the qBittorrent upgrade above fixed
+  its share, and the rest wait for upstream releases ([dependencies.md](dependencies.md#current-findings)).
 - Done: signed releases with checksums, SBOM and SLSA provenance, from the first release on.
 
 ## What homelab-hyperion will not do

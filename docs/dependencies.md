@@ -49,7 +49,8 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
 - The CI-only images in `run:` steps, the images in `.gitlab-ci.yml`, the scripts' busybox image and the
   Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
   Minecraft server whenever players' clients need a newer one, since Bedrock clients usually join only a server
-  of their own version).
+  of their own version). Nor are new qBittorrent versions: Dependabot only proposes rebuilds of qBittorrent's
+  pinned tag ([below](#qbittorrent)), and a new version is bumped by hand when upstream releases one.
 - **Patch and minor updates merge automatically** once every required check has passed (CI with the Compose
   policy check and the smoke test, CodeQL, dependency review).
 - **Image rebuilds merge automatically too**: a pull request that only moves an image to a new digest under the
@@ -63,17 +64,38 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
   can't follow the build tags (`2.6.5.5623-ls163`): it reads `-ls163` as a suffix that must match exactly, so it
   never proposes another build. With the `version-` tag it proposes both new app versions and rebuilds (a new digest
   under the same tag). socket-proxy uses its bare version tag (`3.4.6`) for the same reason.
-- **qBittorrent is held at 4.5.5** for now: Dependabot ignores it until the server has moved to this stack, so
-  the move changes one thing at a time. The upgrade to 5.x is its own pull request, with a backup first, and
-  removes the `ignore` entry.
 - **A merge deploys.** The maintainer's server follows `main` with a pull agent, so every merge, the automatic
   ones included, reaches it within about two minutes ([upgrading.md](upgrading.md#following-main)). Dependabot's
   major updates, which can migrate data, therefore deploy unattended with the nightly backup behind them; the
-  changes merged by hand (the Minecraft server's version, the qBittorrent upgrade) get a backup first.
+  changes merged by hand (the Minecraft server's version, a new qBittorrent version) get a backup first.
 - **Dependency review** blocks a pull request that adds or changes a Python or Actions dependency with a known
   vulnerability of moderate severity or higher, or a license outside the allowlist.
 - **Nothing on the host updates from a registry.** Auto-updaters such as Watchtower are not used: they would run
   versions nobody reviewed. The pull agent only applies commits merged into `main`.
+
+### qBittorrent
+
+qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the hold on 2026-10-22; it now runs
+5.3.0, and Dependabot no longer ignores it. Two things about it differ from the other linuxserver.io images:
+
+- **Its `version-` tag names the libtorrent too**: `version-5.3.0_v2.1.2` is qBittorrent 5.3.0 built on libtorrent
+  2.1.2, pointing at the newest build of exactly that pair. Dependabot can't read that as a version (its tag parser
+  stops at the `_v`), so it proposes only rebuilds of the pinned tag, which merge by themselves like the other
+  images' rebuilds and always keep libtorrent 2.1.2. A new qBittorrent version is a pull request by hand: read its
+  release notes (a new minor version can migrate the settings one way), check which libtorrent the build uses, and
+  back up first. The tags Dependabot could follow are worse here: the plain version and `latest` move to whichever
+  libtorrent linuxserver.io builds next, and they did build 5.3.0 on libtorrent 2.0 for some hours (on 2026-10-20,
+  and on the libtorrent 1.2 line on 2026-10-21), so a rebuild under one of them could change the libtorrent
+  unattended.
+- **libtorrent 2.1 or newer, never memory-mapped files.** libtorrent 2.0 (qBittorrent 4.5.5's) maps every file it
+  reads or writes into memory, and its own documentation calls writing that way to a network share most likely
+  inferior: the share's page cache shows up as qBittorrent's memory and every page fault waits on the network. libtorrent 2.1
+  reads and writes the files with `pread`/`pwrite` from a pool of threads (`pread_disk_io`, the "Pread/pwrite" disk
+  I/O type, and what "Default" means on 2.1). qBittorrent's own builds use libtorrent 2.1 by default since 5.3.0.
+  The disk I/O type is a qBittorrent setting, not a Compose one
+  ([installing.md](installing.md#downloads-on-a-network-share)). linuxserver.io's `libtorrentv1` builds (libtorrent
+  1.2, which never maps files either and reads faster when seeding a lot, upstream says) are the fallback if
+  seeding suffers, at the cost of BitTorrent v2 torrents.
 
 ## Policy for vulnerabilities in dependencies
 
@@ -102,7 +124,7 @@ was dismissed.
 
 | Image | Open alerts (critical) | Distinct findings | Action |
 | --- | --- | --- | --- |
-| qBittorrent `4.5.5-r0-ls292` | 173 (8) | 78 | **Held** at 4.5.5 by the maintainer. The upgrade to 5.x is ready in its own pull request and fixes all but one of them (a scan of that image still finds expat's CVE-2026-77214, fixed in 2.9.0) |
+| qBittorrent `4.5.5-r0-ls292` | 173 (8) | 78 | **Fixed by the upgrade** to 5.3.0 (`version-5.3.0_v2.1.2`, build `ls484`) once the maintainer lifted the hold on 2026-10-22: a scan of the new image with the weekly scan's settings finds nothing ([qBittorrent](#qbittorrent)) |
 | Prowlarr `version-2.6.5.5623` (build `ls165`) | 128 (10) | 19 | **Wait for upstream.** Every finding is in the .NET 8.0.27 runtime Prowlarr bundles, fixed in .NET 8.0.32 (2026-10-13); no Prowlarr build ships a newer runtime yet |
 | Minecraft image `2026.10.1` | 39 | 18 | **Wait for upstream.** The Go standard library in the image's helper tools, and Debian's curl |
 | Heimdall `version-v2.8.3` (build `ls368`) | 11 | 11 | **Wait for upstream.** PHP libraries Heimdall vendors |
@@ -113,10 +135,10 @@ was dismissed.
 
 | Component (image) | CVE | Fixed in | Verdict | Action |
 | --- | --- | --- | --- | --- |
-| xz-libs 5.4.4 (qBittorrent) | CVE-2024-3094, the xz backdoor | 5.6.1-r2 | **Doesn't apply.** The backdoor only ever shipped in xz 5.6.0 and 5.6.1; the image's package database says 5.4.4. Alpine records the fix as 5.6.1-r2, so the scanner flags every older version | Held with qBittorrent |
-| libexpat 2.5.0 (qBittorrent) | CVE-2024-45491, CVE-2024-45492 | 2.6.3 | **Don't apply.** Integer overflows on 32-bit platforms only (where `UINT_MAX` equals `SIZE_MAX`); the image is x86_64 | Held with qBittorrent |
-| PCRE2 10.42: `pcre2`, `libpcre2-16` (qBittorrent) | CVE-2025-58050 | 10.46 | **Doesn't apply.** Only PCRE2 10.45 is affected (the `(*scs:…)` verb it involves is new in 10.45); the image has 10.42 | Held with qBittorrent |
-| OpenSSL 3.1.3: `openssl`, `libssl3`, `libcrypto3` (qBittorrent) | CVE-2026-31789 | 3.5.6 | **Doesn't apply.** A heap overflow on 32-bit platforms only; the image is x86_64 | Held with qBittorrent |
+| xz-libs 5.4.4 (qBittorrent) | CVE-2024-3094, the xz backdoor | 5.6.1-r2 | **Doesn't apply.** The backdoor only ever shipped in xz 5.6.0 and 5.6.1; the image's package database says 5.4.4. Alpine records the fix as 5.6.1-r2, so the scanner flags every older version | Fixed by the upgrade to 5.3.0 |
+| libexpat 2.5.0 (qBittorrent) | CVE-2024-45491, CVE-2024-45492 | 2.6.3 | **Don't apply.** Integer overflows on 32-bit platforms only (where `UINT_MAX` equals `SIZE_MAX`); the image is x86_64 | Fixed by the upgrade to 5.3.0 |
+| PCRE2 10.42: `pcre2`, `libpcre2-16` (qBittorrent) | CVE-2025-58050 | 10.46 | **Doesn't apply.** Only PCRE2 10.45 is affected (the `(*scs:…)` verb it involves is new in 10.45); the image has 10.42 | Fixed by the upgrade to 5.3.0 |
+| OpenSSL 3.1.3: `openssl`, `libssl3`, `libcrypto3` (qBittorrent) | CVE-2026-31789 | 3.5.6 | **Doesn't apply.** A heap overflow on 32-bit platforms only; the image is x86_64 | Fixed by the upgrade to 5.3.0 |
 | ASP.NET Core runtime 8.0.27 (Prowlarr) | CVE-2026-70188 (security feature bypass), CVE-2026-88092 (tampering) | .NET 8.0.32 | **Reachable from the LAN.** HTTP request smuggling in Kestrel, which serves Prowlarr's web UI and API. Mitigated: the UI stays on the LAN and Prowlarr requires a login ([installing.md](installing.md#running-it-securely)) | Wait for upstream |
 
 **Notable high findings:**
@@ -129,10 +151,10 @@ was dismissed.
   is a package reference from MimeKit; the copy Prowlarr loads is ASP.NET Core 8.0.27's own, fixed by the same
   runtime update. Reachable through the web UI and API (LAN, login required), and CVE-2026-50651 (an HTTP/2 flood
   in the HTTP client) through the indexers Prowlarr connects to. Wait for upstream.
-- **qBittorrent 4.5.5** (held). Its own finding, CVE-2024-51774 (before 5.0.1 it keeps using an HTTPS connection
+- **qBittorrent 4.5.5** (until the upgrade to 5.3.0, which fixes all of these). Its own finding, CVE-2024-51774 (before 5.0.1 it keeps using an HTTPS connection
   whose certificate failed validation), is reachable only from what qBittorrent fetches over HTTPS itself: RSS
   feeds, torrent URLs, its GeoIP database. OpenSSL 3.1.3 (11 more findings) carries qBittorrent's own TLS
-  connections (libtorrent and Qt link it): the most exposed of the held findings. Python 3.11 and expat (30
+  connections (libtorrent and Qt link it): the most exposed of its findings. Python 3.11 and expat (30
   findings) are there for qBittorrent's search plugins: nothing but Python links expat or xz's `liblzma`. New since
   the first triage: curl's CVE-2026-92392 (HTTP/2 uploads). curl runs only as the health check, a plain HTTP
   request to the container itself, and libcurl otherwise only for Qt's proxy auto-configuration, which isn't set
@@ -160,8 +182,8 @@ was dismissed.
   when Heimdall updates its dependencies; its UI stays on the LAN.
 
 **Older than 60 days.** These findings have had a fix public for more than 60 days (as of 2026-10-22), so they keep
-the OpenSSF Best Practices criterion on fixing vulnerabilities within 60 days unmet: qBittorrent's (held), at least
-those from 2023 to 2025 that apply, its own CVE-2024-51774 among them; six of Prowlarr's (fixed in .NET on
+the OpenSSF Best Practices criterion on fixing vulnerabilities within 60 days unmet: qBittorrent 4.5.5's until the
+upgrade to 5.3.0 (at least those from 2023 to 2025 that apply, its own CVE-2024-51774 among them); six of Prowlarr's (fixed in .NET on
 2026-07-14 and 2026-08-11, in no Prowlarr release yet); the Go findings in the Minecraft image's `set-property`
 (11) and `entrypoint-demoter` (8), fixed in Go 1.26.4 to 1.26.6 (2026-06-02 to 2026-08-13); and six of Heimdall's
 (advisories of 2026-08-03 and 2026-08-06). The other images' remaining findings reach 60 days between 2026-10-31
