@@ -93,10 +93,13 @@ smoke_check() {
 
   # The worker started (it refuses to without its run isolation and egress filter) and reads the API's Galaxy folder,
   # which the API made (owned by PUID, not by root as Docker would make it).
-  compose logs --no-color steerhouse-worker | grep "worker .* ready:" >/dev/null || fail "the worker never logged that it's ready"
+  compose logs --no-color steerhouse-worker | grep "worker .* ready:" >/dev/null ||
+    fail "the worker never logged that it's ready"
   docker run --rm --network none --volumes-from "$(compose ps --quiet steerhouse)" "$busybox" \
     sh -c 'test "$(stat -c %u /data/galaxy)" != 0 && touch /data/galaxy/.smoke-galaxy' </dev/null ||
     fail "the API's Galaxy folder belongs to root"
-  compose exec -T steerhouse-worker test -e /galaxy/.smoke-galaxy || fail "the worker doesn't see the API's Galaxy folder"
+  # After the restore too: restore.sh replaced the folder, so it must have restarted the worker.
+  compose exec -T steerhouse-worker test -e /galaxy/.smoke-galaxy ||
+    fail "the worker doesn't see the API's Galaxy folder"
   echo "Steerhouse: the worker is ready and sees the API's Galaxy folder"
 }

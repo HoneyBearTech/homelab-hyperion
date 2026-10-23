@@ -161,8 +161,9 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - This stack's own scripts (not in ares): `scripts/steerhouse.sh` (Steerhouse's secrets, `steerhouse.env`, CA and
   database certificate, the `grafana_ro` role) and `scripts/smoke-stack.sh` (the smoke test's stack-specific steps:
   `smoke_prepare` and `smoke_check`). The hooks that call it, the `*_SUBNET` setting rule, `user: PUID:PGID` folders
-  and skipping services with Docker secrets in the restore's "moved" check are generic `smoke-test.sh` changes
-  (2026-10-22) still to be ported to ares.
+  and skipping services with Docker secrets in the restore's "moved" check are generic `smoke-test.sh` changes, and
+  `restore.sh` stopping and restarting a service that bind-mounts a folder inside restored data a generic
+  `restore.sh` change (2026-10-22), still to be ported to ares.
 - GitLab copy: the owner's self-hosted GitLab (CE, LAN only; host facts in Chronos) is to hold a mirror. GitHub
   stays the home (OpenSSF badges, Scorecard, Dependabot, releases); every change goes to GitHub as a PR, never to
   GitLab. `.gitlab-ci.yml` mirrors GitHub on a schedule (fast-forward only, `MIRROR_TOKEN` CI/CD variable) and
