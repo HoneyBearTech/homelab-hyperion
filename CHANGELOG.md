@@ -8,6 +8,15 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Upgrading
 
+- **Steerhouse needs its secrets, tokens, certificate and settings on the host before this is deployed**
+  ([installing.md](docs/installing.md#steerhouse)). As the `PUID` user, in the checkout: create
+  `CONFIG_ROOT/steerhouse/config` and `CONFIG_ROOT/steerhouse-postgres/config`, run `scripts/steerhouse.sh secrets
+  "$CONFIG_ROOT/steerhouse/secrets"` and `scripts/steerhouse.sh env steerhouse.env`, issue the database's
+  certificate (`scripts/steerhouse.sh ca` once on another machine, `request` here, `sign` there), and save
+  `credential_encryption_key` in a password manager. Add the six `STEERHOUSE_*` settings to `.env` last: a deploy
+  without them stops at `docker compose config` and changes nothing. After the deploy, run
+  `scripts/steerhouse.sh grafana-role` and add the reverse proxy host.
+
 - **Add `INCOMPLETE_PATH` to `.env` before this is deployed** (required; see `.env.example`): the host directory
   qBittorrent keeps torrents in while they download, mounted at `/incomplete`. It must exist and be writable by
   `PUID:PGID`. A deploy without it stops at `docker compose config` and changes nothing.
@@ -93,7 +102,28 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Added
 
-- qBittorrent mounts `INCOMPLETE_PATH` at `/incomplete` for torrents still downloading ("Keep incomplete torrents
+-- Steerhouse 0.10.1 (Ansible playbooks from a web UI): its API (`steerhouse`), workers (`steerhouse-worker`), web
+  UI (`steerhouse-frontend`, on `STEERHOUSE_PORT`, for the reverse proxy) and PostgreSQL 18.6
+  (`steerhouse-postgres`), from Steerhouse's own deploy files without its `monitoring` profile. Data in
+  `CONFIG_ROOT/steerhouse/config` and `CONFIG_ROOT/steerhouse-postgres/config` (backed up, the database stopped while
+  it's copied); secrets as Docker secret files in `CONFIG_ROOT/steerhouse/secrets` (never backed up) and tokens in
+  the new `steerhouse.env` (template `steerhouse.env.example`). Six new required settings: `STEERHOUSE_PORT`,
+  `STEERHOUSE_PUBLIC_URL`, `STEERHOUSE_TRUSTED_PROXIES`, `STEERHOUSE_METRICS_PORT`, `STEERHOUSE_POSTGRES_PORT`,
+  `STEERHOUSE_DB_SUBNET`.
+- For Argus: Steerhouse's Prometheus metrics on `STEERHOUSE_METRICS_PORT` (with `METRICS_TOKEN`), and its database on
+  `STEERHOUSE_POSTGRES_PORT` for Grafana's read-only role `grafana_ro` (the `analytics` views), TLS 1.3 only, with a
+  certificate from your own CA.
+- `scripts/steerhouse.sh`: writes Steerhouse's secret files, `steerhouse.env`, a CA, the database's key and signing
+  request, and the certificate signed for it, so that no private key leaves the machine it was made on (never
+  replacing a file), and creates `grafana_ro` with Steerhouse's own setup command.
+- The smoke test runs a stack's own steps from `scripts/smoke-stack.sh`: here Steerhouse's throwaway secrets and
+  certificate, and checks that `grafana_ro` reads the `analytics` views over TLS and nothing else, that connections
+  without TLS and every other remote login are refused, that the metrics need the token and that the worker is
+  ready, before and after the restore. It also gives a `*_SUBNET` setting a free address range, makes the folder of
+  a service that runs as `user: PUID:PGID`, and leaves services with Docker secrets out of the restore's
+  recreated-container check.
+
+ qBittorrent mounts `INCOMPLETE_PATH` at `/incomplete` for torrents still downloading ("Keep incomplete torrents
   in"). Like `/downloads`, it is in qBittorrent's `backup.skip` label: never backed up, never written by a restore.
 
 ### Changed
@@ -142,6 +172,10 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Fixed
 
+- `scripts/restore.sh` stops a service that bind-mounts a folder inside a mount it restores, and starts it again
+  afterwards: such a container kept seeing the folder the restore had replaced (found with Steerhouse's worker, which
+  reads the API's Galaxy folder).
+
 - qBittorrent may keep 65536 files open again (`ulimits: nofile`). On a server whose Docker Engine uses
   containerd 2.x (Docker Engine 29's packages), containers start with a limit of 1024, which a torrent client with a
   few large torrents can run out of ("Too many open files"); containerd 1.7 gave about a million.
@@ -167,7 +201,14 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Security
 
-- qBittorrent 5.3.0 fixes all 173 image-scan alerts on qBittorrent 4.5.5 (8 of them critical), most in its 2023
+-- Steerhouse's worker keeps the `NET_ADMIN` capability (label `org.honeybeartech.hyperion.allow.cap-add`; the
+  maintainer agreed on 2026-10-22) for its egress filter, which keeps playbook runs from reaching Steerhouse's API and
+  cloud metadata. Every other Steerhouse service drops all capabilities; the API, workers and database have
+  read-only root filesystems and the API and database run as `PUID`:`PGID`. The database's `pg_hba.conf` admits its
+  own user only from its internal network and, from anywhere else, only `grafana_ro` over TLS. Dependabot ignores
+  PostgreSQL majors, which can't open the old data.
+
+ qBittorrent 5.3.0 fixes all 173 image-scan alerts on qBittorrent 4.5.5 (8 of them critical), most in its 2023
   Alpine packages (OpenSSL 3.1.3, expat, Python), and qBittorrent's own CVE-2024-51774 (before 5.0.1 it kept using an
   HTTPS connection whose certificate failed validation). A scan of the new image with the weekly scan's settings
   (Trivy, `linux/amd64`, HIGH and CRITICAL with a fix) finds nothing. qBittorrent 5.x also brings upstream's later

@@ -20,6 +20,9 @@ file changes with them, in the same pull request.
   included ([upgrading.md](upgrading.md#following-main)); releases stay as signed, verified snapshots.
 - Done: qBittorrent upgraded from 4.5.5 to 5.3.0 (libtorrent 2.1), in its own pull request, once the maintainer
   lifted the hold on 2026-10-22.
+- Done: Steerhouse (Ansible playbooks from a web UI) with its PostgreSQL, hosted here because its images are amd64
+  only; its metrics and read-only `analytics` views published for Argus' Prometheus and Grafana, the database over
+  TLS only ([installing.md](installing.md#steerhouse)).
 
 ## Next: safe upgrades and rebuilds
 

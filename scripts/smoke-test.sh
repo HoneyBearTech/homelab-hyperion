@@ -10,9 +10,11 @@
 # It stays away from any real installation on the same Docker host: its own Compose project, settings from
 # .env.example with every directory (*_ROOT, *_PATH; so CONFIG_ROOT, with the apps' folders, too) moved into a
 # temporary directory, every volume and network name (*_VOLUME, *_NETWORK) and name prefix (*_PREFIX) replaced by one
-# of its own, licenses (*_EULA) accepted, no fixed container names, no published ports and no service env files. It
-# never reads .env, ignores the stack's settings in the environment, and on exit removes only the volumes Compose
-# labelled with its own project and the networks it created.
+# of its own, every address range (*_SUBNET) by one Docker has free, licenses (*_EULA) accepted, no fixed container
+# names, no published ports and no service env files. It never reads .env, ignores the stack's settings in the
+# environment, and on exit removes only the volumes Compose labelled with its own project and the networks it created.
+# The stack's own steps (throwaway secrets, checks of what its services expose) are in scripts/smoke-stack.sh, when
+# that exists.
 set -euo pipefail
 
 project=homelab-hyperion-smoke
@@ -20,6 +22,10 @@ timeout=${SMOKE_TIMEOUT:-300}
 root=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=scripts/lib.sh
 . "$root/scripts/lib.sh"
+if [ -f "$root/scripts/smoke-stack.sh" ]; then
+  # shellcheck source=scripts/smoke-stack.sh
+  . "$root/scripts/smoke-stack.sh"
+fi
 
 if [ ! -f "$root/compose.yaml" ]; then
   message="No compose.yaml yet; nothing to smoke-test"
@@ -59,6 +65,25 @@ cleanup() {
 networks=()
 trap cleanup EXIT
 
+# An address range (a /28) that no Docker network on the host uses, nor any range given as an argument, from
+# 172.16.0.0/16: outside Docker's default address pools (172.17-31.0.0/16, 192.168.0.0/16), so a network Compose
+# creates meanwhile can't be given it.
+free_subnet() {
+  # shellcheck disable=SC2046 # one network id per word
+  docker network inspect --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' $(docker network ls -q) |
+    python3 -I -c '
+import ipaddress, sys
+used = [ipaddress.ip_network(s) for s in sys.stdin.read().split() + sys.argv[1:] if "." in s]
+for n in range(255, -1, -1):
+    candidate = ipaddress.ip_network(f"172.16.{n}.0/28")
+    if not any(candidate.overlaps(u) for u in used):
+        print(candidate)
+        break
+else:
+    sys.exit("no free /28 in 172.16.0.0/16")' "$@"
+}
+subnets=()
+
 data_dirs=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -72,6 +97,11 @@ while IFS= read -r line; do
     *_PREFIX) value=${project}_ ;;
     *_VOLUME) value=${project}_$(echo "$key" | tr 'A-Z_' 'a-z-') ;;
     *_NETWORK) value=${project}_$(echo "$key" | tr 'A-Z_' 'a-z-') ;;
+    # A network's address range, which the stack fixes (for an access list), mustn't overlap one already on the host.
+    *_SUBNET)
+      value=$(free_subnet "${subnets[@]+"${subnets[@]}"}")
+      subnets+=("$value")
+      ;;
     # A license the operator accepts in .env (left empty in .env.example): accepted for this throwaway run only,
     # so the service it gates can be tested. The maintainer agreed to this for the Minecraft EULA.
     *_EULA) value=TRUE ;;
@@ -135,9 +165,9 @@ YAML
 
 compose config --quiet
 # The apps' folders inside those directories (CONFIG_ROOT/<app>/config), made as the docs say: owned by PUID:PGID with
-# mode 0755 for a service that runs as that user (its environment sets PUID or UID: the Minecraft server can't take
-# ownership itself); the others are left for Docker to create, owned by root, as on a host (Dozzle runs as root with
-# no capabilities, so it couldn't write a folder owned by PUID).
+# mode 0755 for a service that runs as that user (its environment sets PUID or UID, or it runs as `user: PUID:PGID`:
+# such a service can't take ownership itself); the others are left for Docker to create, owned by root, as on a host
+# (Dozzle runs as root with no capabilities, so it couldn't write a folder owned by PUID).
 if [ -n "$puid" ]; then
   # Made as root in a throwaway container: CONFIG_ROOT itself already belongs to PUID, which may not be the caller.
   while IFS= read -r dir; do
@@ -145,13 +175,20 @@ if [ -n "$puid" ]; then
     docker run --rm --network none -v "$work:/work" "$busybox" \
       sh -c 'mkdir -p "$1" && chown "$2:$3" "$1" && chmod 0755 "$1"' own "/work/${dir#"$work"/}" "$puid" \
       "${pgid:-$puid}" </dev/null
-  done < <(compose config | awk -v work="$work/" '
+  done < <(compose config | awk -v work="$work/" -v puid="$puid" -v pgid="${pgid:-$puid}" '
     /^[^ ]/ { section = $1 }
     section == "services:" && /^  [^ ]/ { service = $1 }
     section == "services:" && /^      (PUID|UID): / { runs_as_puid[service] = 1 }
+    section == "services:" && /^    user: / {
+      user = $2
+      gsub(/"/, "", user)
+      if (user == puid || user == puid ":" pgid) runs_as_puid[service] = 1
+    }
     section == "services:" && /^ +source: / && index($2, work) == 1 { sources[service] = sources[service] $2 "\n" }
     END { for (service in runs_as_puid) printf "%s", sources[service] }')
 fi
+if declare -F smoke_prepare >/dev/null; then smoke_prepare; fi
+if [ -f "$work/override-stack.yaml" ]; then export COMPOSE_FILE=$COMPOSE_FILE:$work/override-stack.yaml; fi
 echo "Starting $(compose config --services | wc -l | tr -d ' ') services," \
   "waiting up to ${timeout}s for them to be healthy"
 # One retry: a service that fetches something from the internet as it starts can fail on the network, not the
@@ -166,6 +203,7 @@ fail() {
   echo "error: $*" >&2
   exit 1
 }
+if declare -F smoke_check >/dev/null; then smoke_check; fi
 
 # A marker file in a data mount, written and read in a throwaway container (the service's image may have no shell).
 put_marker() {
@@ -241,7 +279,8 @@ else
   # names, and creates a folder that is missing (a new host, or the move to CONFIG_ROOT/<app>/...): one app's
   # container is recreated with its data somewhere else, as from older settings, and its folder under CONFIG_ROOT is
   # removed. Preferably an app whose folder isn't owned by root, so the restore must give it back its owner; the app
-  # needs nothing left out of that mount, which this removes too.
+  # needs nothing left out of that mount, which this removes too, and no Docker secrets (their files, under CONFIG_ROOT
+  # too, would be missing).
   moved=""
   moved_mount=""
   config_root=$(sed -n 's/^CONFIG_ROOT=//p' "$work/env")
@@ -249,6 +288,7 @@ else
     IFS=$'\t' read -r service mount <<<"$target"
     id=$(compose ps --quiet "$service")
     if [ -n "$config_root" ] && [ -z "$(left_out "$id" "$mount")" ] &&
+      ! docker inspect --format '{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}' "$id" | grep -q '^/run/secrets/' &&
       data_mounts "$id" | grep -qxF -- "$mount"$'\t'"$config_root/$service/config"; then
       if [ -z "$moved" ]; then
         moved=$service
@@ -311,6 +351,7 @@ else
   fi
   compose up --detach --wait --wait-timeout "$timeout"
   echo "Every data mount was restored, and every service is healthy again"
+  if declare -F smoke_check >/dev/null; then smoke_check; fi
 fi
 
 # The unattended backup, copying to a stand-in for the backup server (a local directory, which rsync treats the same

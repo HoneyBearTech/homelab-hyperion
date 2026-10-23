@@ -12,7 +12,10 @@ The [quick start](quick-start.md) is the short version of this page.
 - A downloads directory (local disk or a network share) writable by `PUID`/`PGID`. If the media apps that
   import from it run on another machine, it must be storage that machine sees too.
 - Free host ports: 80 and 443 (Heimdall), 4040 (Dozzle), 6881 TCP and UDP (qBittorrent), 8090 (qBittorrent's
-  web UI), 9696 (Prowlarr), and 19132 TCP and 19140–19149 UDP (Minecraft).
+  web UI), 9696 (Prowlarr), 19132 TCP and 19140–19149 UDP (Minecraft), and the three Steerhouse ports you choose
+  (`STEERHOUSE_PORT`, `STEERHOUSE_METRICS_PORT`, `STEERHOUSE_POSTGRES_PORT`).
+- `openssl` on the host, for `scripts/steerhouse.sh` (Steerhouse's secrets and its database's certificate), and a
+  reverse proxy that serves Steerhouse's web UI over HTTPS ([Steerhouse](#steerhouse)).
 - Acceptance of the [Minecraft EULA](https://www.minecraft.net/eula), which the Bedrock Dedicated Server requires.
 
 ## Where data lives
@@ -31,10 +34,14 @@ yet).
 | Heimdall's database and settings | `CONFIG_ROOT/heimdall/config` | `/config` |
 | The Minecraft server's worlds and settings | `CONFIG_ROOT/minecraft/config` | `/data` |
 | Dozzle's settings (saved in its UI) | `CONFIG_ROOT/dozzle/config` | `/data` |
+| Steerhouse's playbooks, run logs, Galaxy content and git checkouts | `CONFIG_ROOT/steerhouse/config` | `/data` (the workers: `galaxy/` at `/galaxy`, read-only) |
+| Steerhouse's secrets (not backed up) | `CONFIG_ROOT/steerhouse/secrets` | `/run/secrets/<name>`, read-only |
+| Steerhouse's database, and its TLS certificate and key (`tls/`) | `CONFIG_ROOT/steerhouse-postgres/config` | `/var/lib/postgresql` |
 
 The container paths are fixed in `compose.yaml` ([interfaces.md](interfaces.md#volumes-and-mounts)). The apps'
 folders must be owned by `PUID`:`PGID`, except Dozzle's: Dozzle runs as root, so leave its folder for Docker to
-create (owned by root) on the first start. autoheal and the socket proxy keep no data.
+create (owned by root) on the first start. Steerhouse's API and database run as `PUID`:`PGID` and can't take
+ownership of anything, so create their folders before the first start. autoheal and the socket proxy keep no data.
 
 > **Warning: keep app data out of Docker volumes.** Never point `CONFIG_ROOT`, `DOWNLOADS_PATH`, `INCOMPLETE_PATH` or any other path
 > setting into `/var/lib/docker/volumes`, and don't keep app data in named Docker volumes. `docker volume prune`,
@@ -61,7 +68,8 @@ restart qBittorrent (`docker compose restart qbittorrent`). The setting is kept 
 2. Create `.env` from `.env.example` (mode `600`) and set every value, including `MINECRAFT_EULA=TRUE`.
    Optionally create `autoheal.env` from `autoheal.env.example` (mode `600`) for restart notices.
 3. Create the apps' folders as the `PUID`:`PGID` user (all but Dozzle's,
-   [quick start](quick-start.md)), then `docker compose up -d --wait`.
+   [quick start](quick-start.md)), and Steerhouse's secrets, tokens and database certificate
+   ([below](#steerhouse)), then `docker compose up -d --wait`.
 
 **Adopting existing containers.** If the services already run on the host (from Portainer stacks or another
 Compose project), move their existing data into the apps' folders instead of starting empty: stop the old
@@ -77,6 +85,102 @@ world's folder name (otherwise the server starts a new, empty world), make `CONF
 The maintainer's server runs `main` rather than a release, and deploys every merge by itself
 ([upgrading.md](upgrading.md#following-main)). For your own setup, a release is the safer choice.
 
+## Steerhouse
+
+[Steerhouse](https://github.com/HoneyBearTech/Steerhouse) runs Ansible playbooks from a web UI. It stores the SSH
+keys, vault passwords and tokens of the machines it manages (encrypted with `credential_encryption_key`), so treat
+it as the most sensitive service here. It is five pieces: the database (`steerhouse-postgres`), the API
+(`steerhouse`), the workers that run the playbooks (`steerhouse-worker`) and the web UI (`steerhouse-frontend`),
+from Steerhouse's own `deploy/compose.yaml`. Its monitoring is Argus' job (on another host): the API's Prometheus
+metrics and the database's read-only `analytics` views are published for it, the database over TLS only.
+
+Before the first start, as the `PUID`:`PGID` user, in the checkout:
+
+1. **Folders and secrets.** `scripts/steerhouse.sh` never replaces a file that exists.
+
+   ```sh
+   CONFIG_ROOT=$(sed -n 's/^CONFIG_ROOT=//p' .env)
+   mkdir -p "$CONFIG_ROOT/steerhouse/config" "$CONFIG_ROOT/steerhouse-postgres/config"
+   scripts/steerhouse.sh secrets "$CONFIG_ROOT/steerhouse/secrets"
+   scripts/steerhouse.sh env steerhouse.env
+   ```
+
+   `secrets` writes the six secret files ([interfaces.md](interfaces.md#steerhouses-secret-files)), `env` the two
+   tokens. **Save `credential_encryption_key` in a password manager now**, with the other secrets: they are never in
+   the stack's backups, on purpose (anyone with a database backup and the key can decrypt every stored SSH key),
+   and a database restored without its key is useless. `admin_password` is the first admin's password (user
+   `admin`); change it in Steerhouse after signing in.
+2. **The database's certificate**, from a certificate authority of your own. Each private key stays where it is
+   made: the CA's on a machine you trust (not this host; keep a copy in the password manager), the database's on
+   this host. Only the signing request and the certificates move. Make the CA once, on that machine (with a
+   checkout of this repository):
+
+   ```sh
+   scripts/steerhouse.sh ca ~/steerhouse-ca     # ca.crt and ca.key, valid 10 years
+   ```
+
+   Here, make the database's key and a signing request:
+
+   ```sh
+   scripts/steerhouse.sh request "$CONFIG_ROOT/steerhouse-postgres/config/tls"   # server.key (600) and server.csr
+   ```
+
+   On the CA's machine, sign it for every name and address Argus' Grafana connects to (it checks them), then copy
+   the certificate back as `server.crt`, with the CA's certificate as `ca.crt`, the one Argus pins:
+
+   ```sh
+   scp <this host>:<CONFIG_ROOT>/steerhouse-postgres/config/tls/server.csr .
+   scripts/steerhouse.sh sign ~/steerhouse-ca server.csr server.crt <this host's address> <this host's DNS name>
+   scp server.crt ~/steerhouse-ca/ca.crt <this host>:<CONFIG_ROOT>/steerhouse-postgres/config/tls/
+   ```
+
+   They are backed up with the database (`server.key` owned by you, mode `600`: the database runs as `PUID`). The
+   certificate is valid for 3 years; to renew it, sign the same `server.csr` again, replace `server.crt` and run
+   `docker compose restart steerhouse-postgres`.
+3. **Settings** in `.env`: `STEERHOUSE_PORT`, `STEERHOUSE_PUBLIC_URL`, `STEERHOUSE_TRUSTED_PROXIES` (the reverse
+   proxy's address), `STEERHOUSE_METRICS_PORT`, `STEERHOUSE_POSTGRES_PORT` and `STEERHOUSE_DB_SUBNET`, a private
+   range that no network on the host uses yet:
+
+   ```sh
+   docker network inspect --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}} {{end}}' $(docker network ls -q)
+   ```
+
+4. **Start it** (`docker compose up -d --wait`). The API creates and migrates the database on its first start.
+5. **The role for Argus' Grafana**, once the stack is up:
+
+   ```sh
+   scripts/steerhouse.sh grafana-role
+   ```
+
+   It runs Steerhouse's own setup in the API's container: it creates `grafana_ro` as Steerhouse documents
+   (`LOGIN NOINHERIT CONNECTION LIMIT 10`, read-only transactions, `statement_timeout` 30 s, `search_path`
+   `analytics`), lets it read the `analytics` views (`analytics-grant`) and checks that it can read nothing else
+   (`analytics-check`). Run it again after you change `grafana_db_password` (it sets the role's password again) and
+   after an upgrade of Steerhouse.
+6. **HTTPS in front.** On the reverse proxy (Nginx Proxy Manager), a proxy host for the name in
+   `STEERHOUSE_PUBLIC_URL`, forwarding to `http://<this host>:<STEERHOUSE_PORT>`, with **Websockets Support** on
+   (live run output uses them), an SSL certificate, Force SSL and HSTS, and, under Advanced,
+   `proxy_read_timeout 1h;` (long runs keep their output stream open). It passes the `Host` header and the
+   client's address in `X-Forwarded-For`, which Steerhouse believes from `STEERHOUSE_TRUSTED_PROXIES` only. Don't
+   strip the security headers the web UI sends.
+7. **Sign in** at `STEERHOUSE_PUBLIC_URL` as `admin`, change the password and set up two-factor login: admins must
+   (`REQUIRE_ADMIN_2FA` is on). Then follow Steerhouse's quick start from its step 2.
+
+**What Argus needs**, over the LAN:
+
+| For | Address | Credentials |
+| --- | --- | --- |
+| Prometheus | `http://<this host>:<STEERHOUSE_METRICS_PORT>/metrics` | `Authorization: Bearer <METRICS_TOKEN>` (from `steerhouse.env`) |
+| Grafana's PostgreSQL data source | `<this host>:<STEERHOUSE_POSTGRES_PORT>`, database `steerhouse` | user `grafana_ro`, password `grafana_db_password`; TLS mode `verify-full` with `ca.crt` (`CONFIG_ROOT/steerhouse-postgres/config/tls/ca.crt`); max open connections below 10 |
+
+The database accepts nothing else from outside its internal network: no connection without TLS (and TLS 1.3 only),
+no other role, and its own user `steerhouse` only from `steerhouse-db`. The metrics answer only with the token, but
+over plain HTTP: keep the port on the LAN.
+
+**Backups and restores.** The nightly backup archives the API's folder and the database's (the database is stopped
+while its folder is copied, which keeps the copy consistent), certificate included; never the secrets. To restore
+on a new host, put the secret files and `steerhouse.env` back first, from the password manager.
+
 ## Running it securely
 
 - **Web UIs on the LAN only.** Don't publish Prowlarr's, qBittorrent's, Heimdall's or Dozzle's ports beyond the
@@ -89,13 +193,17 @@ The maintainer's server runs `main` rather than a release, and deploys every mer
   mounted read-only, which protects the socket file, not the API behind it.
 - **autoheal only through the socket proxy**, which allows listing, inspecting, restarting and stopping
   containers and nothing else, on a network with no published ports.
+- **Steerhouse holds the keys to other machines.** Keep its web UI behind the reverse proxy's HTTPS and on the
+  LAN, keep two-factor login on for admins, and give each person only the projects they need. Its database and
+  metrics ports are for Argus only: TLS and `grafana_ro` for the one, a token for the other.
 - **qBittorrent is on the public internet** by design: peers see your public IP address. Forward only its
   listening port, never its web UI. Whether to route it through a VPN is your decision; this stack has none.
 - **Minecraft from outside the LAN** means forwarding TCP 19132 and UDP 19140–19149, and setting
   `MINECRAFT_ADDRESS` to an address those players can reach. Do it only if you mean to; the server's allowlist is
   on, so only the players you name can join.
 - Keep `.env` at mode `600`; it holds no secrets by design, but it describes your host. `autoheal.env` holds a
-  secret (anyone with the webhook URL can post to the channel): mode `600`, never committed.
+  secret (anyone with the webhook URL can post to the channel), and `steerhouse.env` two: mode `600`, never
+  committed. Steerhouse's secret files stay mode `600` in a folder of mode `700`.
 - Back up the apps' folders under `CONFIG_ROOT` ([upgrading.md](upgrading.md#backing-up)), and schedule a nightly copy
   off the host ([below](#scheduled-backups)).
 - Don't add services that mount the Docker socket, run privileged or use the host network without a documented

@@ -1,7 +1,8 @@
 # homelab-hyperion
 
 The Docker Compose stack for Hyperion, the owner's homelab Ubuntu server (24.04, amd64, a VM, no GPU):
-Prowlarr, qBittorrent, Heimdall, Dozzle, a Minecraft Bedrock server, and autoheal behind a socket proxy, every
+Prowlarr, qBittorrent, Heimdall, Dozzle, a Minecraft Bedrock server, Steerhouse (Ansible playbooks from a web UI,
+with its Postgres), and autoheal behind a socket proxy, every
 image pinned by tag and digest so the server can be upgraded and rebuilt from this repository. Hyperion runs the
 stack from a checkout of `main` that a pull agent deploys (see Deploys below); its nightly backups go off the host.
 
@@ -14,8 +15,8 @@ Read the project's notes first. They live outside this repo, in the owner's Obsi
 - `homelab-hyperion-Architecture.md`: the host, which containers run there today and which belong in this repo,
   data flow, deployment shape, cutover plan
 - `homelab-hyperion-Security-Considerations.md`: assets, threats, trust boundaries, checklist (Prowlarr holds
-  every indexer credential, qBittorrent talks to the public BitTorrent swarm, and Dozzle and autoheal reach the
-  Docker API: treat these notes as load-bearing)
+  every indexer credential, qBittorrent talks to the public BitTorrent swarm, Dozzle and autoheal reach the
+  Docker API, and Steerhouse holds the SSH keys of the machines it manages: treat these notes as load-bearing)
 - `homelab-hyperion-Decisions-Log.md`: ADR-style log (entries marked **Proposed** still need the owner's call)
 
 Keep them current as work lands: tick roadmap checkboxes, add a Pass-Map row per pass, add dated
@@ -36,8 +37,8 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - Commit as `31805425+HoneyBearTech@users.noreply.github.com` (set as this repo's `user.email`), with
   `git commit -s` for the DCO sign-off; commits and tags are SSH-signed.
 - No secrets: the services' logins, Prowlarr's indexer credentials and API keys, qBittorrent's web UI password,
-  and any autoheal webhook URL stay in their folders under `CONFIG_ROOT` on the host (or a gitignored
-  `<service>.env`), never in `compose.yaml`, `.env` or the `*.example` files. A secret a service can only take from
+  Steerhouse's secrets and any autoheal webhook URL stay in their folders under `CONFIG_ROOT` on the host (or a
+  gitignored `<service>.env`), never in `compose.yaml`, `.env` or the `*.example` files. A secret a service can only take from
   its environment gets its own gitignored `<service>.env` (`env_file`) with a committed `<service>.env.example`.
   `.gitignore` covers `.env`, keys, certificates, `appdata/`, `data/`, `media/`, `downloads/`, `backups/`; extend it
   rather than work around it.
@@ -69,13 +70,28 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - **No privileged containers, added capabilities, host network/PID, Docker socket mounts or device mappings**
   unless the service carries `org.honeybeartech.hyperion.allow.<rule>: "<reason>"` and the owner agreed. Only
   Dozzle (read-only) and the socket proxy may have the socket; autoheal reaches Docker only through the proxy.
+  The exceptions in use: `allow.docker-socket` (Dozzle, socket-proxy), `allow.latest` (autoheal) and
+  `allow.cap-add` (steerhouse-worker: `NET_ADMIN` for Steerhouse's egress filter, owner 2026-10-22).
 - **Every service is hardened** (`x-hardened`: `security_opt: [no-new-privileges:true]`, `cap_drop: [ALL]`) and
   adds back only the capabilities its image needs, all from Docker's default set, each with a comment saying why
   and proven by the smoke test (docs/security.md#hardening). A capability outside the default set needs
   `allow.cap-add` and the owner's agreement. `scripts/check_compose.py` enforces all of this in CI and in the
   release workflow. Read-only root filesystems (`read_only: true` + `tmpfs` only, no image-specific env flags) for
-  Dozzle, Minecraft, autoheal and the socket proxy; the linuxserver.io (s6) images stay writable (their init runs
-  from `/run`, and a tmpfs there is noexec). Keep it that way when adding a service.
+  Dozzle, Minecraft, autoheal, the socket proxy and Steerhouse's API (with `HOME=/tmp` for Ansible's `~/.ansible`),
+  worker and database; the linuxserver.io (s6)
+  images stay writable (their init runs from `/run`, and a tmpfs there is noexec), and so does Steerhouse's web UI
+  (its entrypoint writes the trusted-proxy config into `/etc/nginx/conf.d`). Keep it that way when adding a service.
+- **Steerhouse is security-critical** (hosted here, not on Ares, because its images are amd64 only; owner
+  2026-10-22): it stores the SSH keys and vault passwords of the machines it manages. Its secrets are Docker secret
+  files in `CONFIG_ROOT/steerhouse/secrets` (never in the repo, `.env` or the backups; `credential_encryption_key`
+  lives in the owner's password manager), its tokens (`WORKER_TOKEN`, `METRICS_TOKEN`) in `steerhouse.env`. Only the
+  database and the API get secrets; the worker gets none and only the `steerhouse-workers` network. For Argus (on
+  Ares; owner 2026-10-22) the API's metrics port is published (token-protected) and so is Postgres, **TLS only**:
+  `pg_hba` (`PG_HBA` in compose) admits remote logins for the read-only role `grafana_ro` over `hostssl` only, the
+  app's user `steerhouse` only from `steerhouse-db` (fixed range `STEERHOUSE_DB_SUBNET`), and rejects everything
+  else; the certificate is from the owner's own CA (`scripts/steerhouse.sh`). Never loosen that, and never give
+  another role remote access. The smoke test proves it (`scripts/smoke-stack.sh`). PostgreSQL majors are ignored by
+  Dependabot (a major can't open the old data): a hand-made PR with a dump and restore.
 - **Nightly backups as on ares and helios** (owner 2026-10-13): `scripts/scheduled-backup.sh` from a systemd user
   timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
   service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.
@@ -129,7 +145,8 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 
 ## Stack
 - Docker Compose v2 (`compose.yaml`), upstream images: Prowlarr, qBittorrent, Heimdall
-  (linuxserver.io), Dozzle, the Minecraft Bedrock server (`itzg/minecraft-bedrock-server`), autoheal, a socket
+  (linuxserver.io), Dozzle, the Minecraft Bedrock server (`itzg/minecraft-bedrock-server`), Steerhouse
+  (`honeybeartech/steerhouse-backend` and `-frontend`, amd64 only, with `postgres`), autoheal, a socket
   proxy. Not in this repo: Plex, Tdarr, the Argus agent, the Portainer agent, the local Portainer server (to be
   retired).
 - Tooling (from homelab-ares, the template): `scripts/check_compose.py` (Python, standard library only:
@@ -141,6 +158,12 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   the read-only `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets when they exist (owner 2026-10-13; Actions and
   Dependabot secrets in place, anonymous fallback for fork PRs) and logs out before the smoke test starts any
   container.
+- This stack's own scripts (not in ares): `scripts/steerhouse.sh` (Steerhouse's secrets, `steerhouse.env`, CA and
+  database certificate, the `grafana_ro` role) and `scripts/smoke-stack.sh` (the smoke test's stack-specific steps:
+  `smoke_prepare` and `smoke_check`). The hooks that call it, the `*_SUBNET` setting rule, `user: PUID:PGID` folders
+  and skipping services with Docker secrets in the restore's "moved" check are generic `smoke-test.sh` changes, and
+  `restore.sh` stopping and restarting a service that bind-mounts a folder inside restored data a generic
+  `restore.sh` change (2026-10-22), still to be ported to ares.
 - GitLab copy: the owner's self-hosted GitLab (CE, LAN only; host facts in Chronos) is to hold a mirror. GitHub
   stays the home (OpenSSF badges, Scorecard, Dependabot, releases); every change goes to GitHub as a PR, never to
   GitLab. `.gitlab-ci.yml` mirrors GitHub on a schedule (fast-forward only, `MIRROR_TOKEN` CI/CD variable) and

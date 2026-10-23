@@ -52,7 +52,10 @@ A server that follows `main` ([upgrading.md](upgrading.md#following-main)) stays
 The backup's `VERSION` names the release (or commit) the old host ran; backups made before it existed don't
 have one, so check the release notes instead.
 
-Copy any `<service>.env` from the backup's `env/` the same way (mode `600`). Edit `.env` if the new host's
+Copy any `<service>.env` from the backup's `env/` the same way (mode `600`). Steerhouse's secret files aren't in the
+backup, on purpose: put them back into `CONFIG_ROOT/steerhouse/secrets` (mode `700`, the files `600`) from the
+password manager before the restore, above all `credential_encryption_key`, without which Steerhouse can't decrypt
+any credential in its restored database ([installing.md](installing.md#steerhouse)). Edit `.env` if the new host's
 paths differ (but keep the downloads' container path). A backup taken before the apps' data moved under
 `CONFIG_ROOT` has an `.env` without it: add `CONFIG_ROOT` (see `.env.example`) and drop the old per-app path
 settings; the restore puts each archive into the app's folder under `CONFIG_ROOT` all the same. Create the apps'
@@ -71,7 +74,10 @@ docker compose ps
 ```
 
 Then sign in to each service: Prowlarr should list its indexers and apps, qBittorrent its torrents, Heimdall its
-links, and the Minecraft server should load its worlds. A Minecraft release older than the backup's can't open
+links, the Minecraft server should load its worlds, and Steerhouse should list its projects and decrypt a
+credential (run a playbook that uses one). Its database's certificate comes back with the database; if the new host
+has another name or address, sign a new one for it (`scripts/steerhouse.sh sign`) with the same CA, which Argus
+already trusts. A Minecraft release older than the backup's can't open
 its worlds: check out that release or a newer one.
 
 ## What the backup doesn't bring back
@@ -81,6 +87,7 @@ its worlds: check out that release or a newer one.
   agents, and the scheduled backup (its key for the backup server, the `~/.ssh/config` alias and the systemd
   units: set them up again as [installing.md](installing.md#scheduled-backups) describes; `backup.env` comes back
   from the backup's `env/`).
+- **Steerhouse's secrets**: they live in the password manager, not in the backup (see above).
 - **Other machines' view of this one**: the media apps' settings, reverse proxy hosts, DNS records, router port
-  forwards, anything that reaches Hyperion by address.
+  forwards, anything that reaches Hyperion by address (Argus' Prometheus and Grafana, for Steerhouse).
 - **Services from other projects** on the same host: restore them from their own backups.

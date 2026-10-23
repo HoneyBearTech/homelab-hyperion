@@ -12,6 +12,8 @@ APPS = {
     "heimdall": "/config",
     "dozzle": "/data",
     "minecraft": "/data",
+    "steerhouse": "/data",
+    "steerhouse-postgres": "/var/lib/postgresql",
 }
 # Mounts that aren't app data: the downloads, finished and incomplete (never backed up), and the Docker socket.
 OTHER_MOUNTS = {
@@ -19,6 +21,29 @@ OTHER_MOUNTS = {
     "${INCOMPLETE_PATH:?set INCOMPLETE_PATH in .env}:/incomplete",
     "/var/run/docker.sock:/var/run/docker.sock:ro",
 }
+# Another app's folder, read-only: Steerhouse's workers read the API's Galaxy roles and collections.
+SHARED_MOUNTS = {
+    "steerhouse-worker": {f"{CONFIG_ROOT}/steerhouse/config/galaxy:/galaxy:ro"},
+}
+# Steerhouse's secrets: Docker secret files in its folder under CONFIG_ROOT (never backed up), for the database and
+# the API only.
+STEERHOUSE_SECRETS = {
+    "steerhouse-postgres": {"postgres_password"},
+    "steerhouse": {
+        "database_url",
+        "auth_secret_key",
+        "credential_encryption_key",
+        "admin_password",
+        "grafana_db_password",
+    },
+}
+
+
+def mount(volume: str | dict) -> str:
+    """A volume as Compose's short syntax (``source:target``, ``:ro`` when read-only), from either syntax."""
+    if isinstance(volume, str):
+        return volume
+    return f"{volume['source']}:{volume['target']}" + (":ro" if volume.get("read_only") else "")
 
 
 def read(path: str) -> str:
@@ -41,13 +66,13 @@ def test_every_setting_is_in_env_example_and_interfaces() -> None:
 def test_each_app_keeps_its_data_in_its_folder_under_config_root() -> None:
     services = compose()["services"]
     for app, path in APPS.items():
-        assert f"{CONFIG_ROOT}/{app}/config:{path}" in services[app]["volumes"]
+        assert f"{CONFIG_ROOT}/{app}/config:{path}" in [mount(v) for v in services[app]["volumes"]]
 
 
 def test_every_data_mount_comes_from_the_apps_folder_under_config_root() -> None:
     for name, service in compose()["services"].items():
-        for volume in service.get("volumes") or []:
-            if volume in OTHER_MOUNTS:
+        for volume in map(mount, service.get("volumes") or []):
+            if volume in OTHER_MOUNTS or volume in SHARED_MOUNTS.get(name, set()):
                 continue
             assert re.fullmatch(re.escape(f"{CONFIG_ROOT}/{name}/") + r"[a-z0-9-]+:/[^:]+", volume), (
                 f"{name} mounts {volume}, not a folder under CONFIG_ROOT/{name}/"
@@ -59,14 +84,15 @@ def test_no_named_volumes() -> None:
     assert "volumes" not in config
     for name, service in config["services"].items():
         for volume in service.get("volumes") or []:
-            assert volume.startswith(("/", "${")), f"{name} mounts a named volume: {volume}"
+            assert isinstance(volume, str) or volume["type"] == "bind", f"{name} mounts a named volume: {volume}"
+            assert mount(volume).startswith(("/", "${")), f"{name} mounts a named volume: {volume}"
 
 
 def test_no_path_points_into_docker_volumes() -> None:
     settings = re.findall(r"^[A-Z][A-Z0-9_]*=(.*)$", read(".env.example"), re.MULTILINE)
     assert not [value for value in settings if "/var/lib/docker" in value]
     for name, service in compose()["services"].items():
-        for volume in service.get("volumes") or []:
+        for volume in map(mount, service.get("volumes") or []):
             assert "/var/lib/docker" not in volume, f"{name} mounts {volume}"
 
 
@@ -75,3 +101,47 @@ def test_the_docs_warn_against_docker_volumes_for_app_data() -> None:
         text = " ".join(read(path).split())
         assert "/var/lib/docker/volumes" in text, path
         assert "docker volume prune" in text, path
+
+
+def test_steerhouse_secrets_are_files_under_config_root_for_the_database_and_api_only() -> None:
+    config = compose()
+    for name, secret in config["secrets"].items():
+        target = name.removeprefix("steerhouse_")
+        assert secret == {"file": f"{CONFIG_ROOT}/steerhouse/secrets/{target}"}, name
+    for name, service in config["services"].items():
+        targets = {s["target"] for s in service.get("secrets") or []}
+        assert targets == STEERHOUSE_SECRETS.get(name, set()), name
+        assert all(s["source"] == f"steerhouse_{s['target']}" for s in service.get("secrets") or []), name
+
+
+def test_steerhouse_env_example_has_the_tokens_only() -> None:
+    keys = re.findall(r"^([A-Z][A-Z0-9_]*)=(.*)$", read("steerhouse.env.example"), re.MULTILINE)
+    assert keys == [("WORKER_TOKEN", ""), ("METRICS_TOKEN", "")]
+    interfaces = read("docs/interfaces.md")
+    for key, _ in keys:
+        assert f"`{key}`" in interfaces
+
+
+def test_steerhouse_database_admits_remote_logins_over_tls_for_grafana_ro_only() -> None:
+    service = compose()["services"]["steerhouse-postgres"]
+    rules = [line.split() for line in service["environment"]["PG_HBA"].splitlines() if not line.startswith("#")]
+    assert rules == [
+        ["local", "all", "all", "trust"],
+        [
+            "host",
+            "steerhouse",
+            "steerhouse",
+            "${STEERHOUSE_DB_SUBNET:?set",
+            "STEERHOUSE_DB_SUBNET",
+            "in",
+            ".env}",
+            "scram-sha-256",
+        ],
+        ["hostssl", "steerhouse", "grafana_ro", "all", "scram-sha-256"],
+        ["host", "all", "all", "all", "reject"],
+    ]
+    assert "ssl=on" in service["command"]
+    assert "hba_file=/tmp/pg_hba.conf" in service["command"]
+    db = compose()["networks"]["steerhouse-db"]
+    assert db["internal"] is True
+    assert db["ipam"]["config"] == [{"subnet": "${STEERHOUSE_DB_SUBNET:?set STEERHOUSE_DB_SUBNET in .env}"}]

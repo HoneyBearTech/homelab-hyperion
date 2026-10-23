@@ -13,6 +13,11 @@ updates:
     schedule:
       interval: "weekly"
     assignees: ["HoneyBearTech"]
+    ignore:
+      # Steerhouse's database: a new PostgreSQL major can't open the old one's data (it needs pg_upgrade, or a dump
+      # and a restore), so a major is a pull request of its own, made by hand. Minor releases (18.x) come as usual.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
 
   # The check and test tools (requirements-dev.txt), pinned with hashes.
   - package-ecosystem: "pip"
