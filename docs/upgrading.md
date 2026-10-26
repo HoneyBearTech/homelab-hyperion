@@ -43,8 +43,8 @@ each archive's service, container path, host path and image, `NETWORKS` (the add
 stack joins but doesn't create, for a rebuild; this stack creates its own, so only the header), `VERSION` (the
 checkout's `git describe`) and `SHA256SUMS`. Everything in it is readable only by the user who ran the backup,
 and it holds secrets (Prowlarr's indexer credentials among them). **Copy it off the host**: the nightly
-scheduled backup does that for you ([installing.md](installing.md#scheduled-backups)), but take a fresh one
-before an upgrade all the same.
+scheduled backup does that for you ([installing.md](installing.md#scheduled-backups)), encrypted with age when
+`BACKUP_AGE_RECIPIENT` is set, but take a fresh one before an upgrade all the same.
 
 ## Upgrading
 
@@ -115,3 +115,8 @@ since the backup.
 
 See [rebuilding.md](rebuilding.md): install the host, restore `.env`, then `scripts/restore.sh` creates the
 containers and fills their data from the backup.
+
+A backup copied off the host with `BACKUP_AGE_RECIPIENT` set is encrypted to that age key: restoring from it needs
+**the private key**, on the machine that holds it (`age -d -i hyperion-backup.key backup.tar.age | tar -x` gives back
+the backup directory; [rebuilding.md](rebuilding.md#opening-an-encrypted-copy)). The backups in `BACKUP_DIR` on the
+host aren't encrypted.

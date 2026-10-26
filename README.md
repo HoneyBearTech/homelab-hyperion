@@ -125,7 +125,8 @@ Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
 - The Minecraft server's allowlist is on: only the players in its `allowlist.json` can join. Only forward its
   ports (TCP 19132, UDP 19140–19149) to the internet if you mean to host players from outside your LAN.
 - Secrets (logins, indexer API keys, webhook URLs) live only in each service's data or its own gitignored
-  `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host.
+  `<service>.env`, never in this repository or `.env`. Backups contain them: keep them private and off the host, and
+  encrypt the copy that leaves it (`BACKUP_AGE_RECIPIENT`).
 - Don't run an auto-updater such as Watchtower on these containers; upgrade from this repository instead (a
   release, or `main`).
 - Every service drops every Linux capability, adds back only the ones its image needs, and can't gain new

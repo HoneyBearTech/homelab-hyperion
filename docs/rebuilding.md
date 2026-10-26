@@ -7,8 +7,27 @@ How to bring the stack back on a new or wiped machine from a backup made by `scr
 > in CI on every change.
 
 You need: the backup directory (copied off the old host; from the backup server, take the newest one that has a
-`SHA256SUMS`, since a copy that was cut off has none), this repository, and the downloads storage if it's a
-network share.
+`SHA256SUMS`, since a copy that was cut off has none), **the age private key** it was encrypted to if the copies off
+the host are encrypted (`BACKUP_AGE_RECIPIENT`; [below](#opening-an-encrypted-copy)), this repository, and the
+downloads storage if it's a network share.
+
+## Opening an encrypted copy
+
+An encrypted copy (its folder on the backup server holds only `backup.tar.age` and `SHA256SUMS`) is opened on the
+machine that holds the age private key, never on the backup server or the new host. Copy it there and check it
+against its `SHA256SUMS`, then decrypt it, which gives the backup directory as it was written on the old host, and
+copy that to the new host:
+
+```sh
+rsync -rlpt backup-host:/volume1/<folder>/<date>-<time>/ ~/sealed/
+cd ~/sealed && sha256sum -c --quiet SHA256SUMS && cd -
+(umask 077 && age -d -i hyperion-backup.key ~/sealed/backup.tar.age | tar -x -C ~)   # ~/<date>-<time>/
+rsync -rlpt ~/<date>-<time>/ <you>@<the new host>:restore/
+rm -rf ~/sealed ~/<date>-<time>
+```
+
+On the new host, `~/restore` is then the backup directory that the steps below call `/path/to/backup`. Keep it
+private: it holds every login and private key the backup has.
 
 ## 1. The operating system
 

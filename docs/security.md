@@ -31,10 +31,12 @@ live. The reasoning behind these requirements is in the [assurance case](assuran
    the `analytics` views and nothing else, and only over TLS 1.3 with a certificate from the maintainer's own CA.
    The API's metrics answer only with a token. The smoke test proves each of these.
 7. **Backups don't leak and can't reach the downloads.** `scripts/backup.sh` writes archives readable only by
-   the user who ran it (the scheduled copy off the host keeps those modes), and `scripts/restore.sh` writes only
-   the mounts the backup's checksummed `MANIFEST` lists and the service still has, never the downloads directory
-   or any other path a service excludes with its `org.honeybeartech.hyperion.backup.skip` label. Steerhouse's
-   secrets are never in them, so a backup alone can't decrypt the credentials Steerhouse stores.
+   the user who ran it (the scheduled copy off the host keeps those modes). With `BACKUP_AGE_RECIPIENT` set, that
+   copy is encrypted to an age key whose private half isn't on this host, so the backup server holds nothing it can
+   read. `scripts/restore.sh` writes only the mounts the backup's checksummed `MANIFEST` lists and the service still
+   has, never the downloads directory or any other path a service excludes with its
+   `org.honeybeartech.hyperion.backup.skip` label. Steerhouse's secrets are never in them, so a backup alone can't
+   decrypt the credentials Steerhouse stores.
 
 ## Policy
 
@@ -107,9 +109,12 @@ first start usually has data with an unexpected owner.
 - **The host.** Anyone with root, `docker` group membership or write access to `.env` or the services' data
   controls the stack; those are trusted.
 - **Backups off the host from the host itself.** The scheduled backup can delete old backups on the backup
-  server, so whoever controls this host can delete or overwrite them too. Snapshots or a versioned copy on the
-  backup server, outside this host's reach, are what protect them; a recycle bin may not see deletions made over
-  rsync (Synology's doesn't).
+  server, so whoever controls this host can delete or overwrite them too (though not read them, when they're
+  encrypted). Snapshots or a versioned copy on the backup server, outside this host's reach, are what protect them;
+  a recycle bin may not see deletions made over rsync (Synology's doesn't). The backups in `BACKUP_DIR` on the host
+  aren't encrypted.
+- **The age private key.** With `BACKUP_AGE_RECIPIENT` set, whoever has it can read every backup copied off the
+  host; whoever loses it can read none. Keeping it is the operator's job.
 - **Upstream images' internals.** Some images run as root inside the container; that is the image's design and
   is accepted where the image offers nothing else.
 
@@ -126,4 +131,5 @@ first start usually has data with an unexpected owner.
 | The key of Steerhouse's database certificate, and its CA's key | `CONFIG_ROOT/steerhouse-postgres/config/tls/server.key` (mode `600`, backed up with the database); the CA's key off the host | the repository, issues |
 | The backup push monitor's URL | `backup.env` (mode `600`, gitignored) | the repository, issues, logs you paste |
 | The key for the backup server | the stack user's `~/.ssh` on the host, restricted on the server to this host | same |
-| Backups of the data | off the host, mode `600` | anywhere public |
+| The age private key for the backups (`BACKUP_AGE_RECIPIENT`) | off this host, with the operator's recovery secrets | this host, the backup server, anywhere public |
+| Backups of the data | on the host and off it mode `600`; off the host encrypted with age when `BACKUP_AGE_RECIPIENT` is set | anywhere public |
