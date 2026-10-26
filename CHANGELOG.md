@@ -129,6 +129,11 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
  qBittorrent mounts `INCOMPLETE_PATH` at `/incomplete` for torrents still downloading ("Keep incomplete torrents
   in"). Like `/downloads`, it is in qBittorrent's `backup.skip` label: never backed up, never written by a restore.
+- An encrypted copy off the host for the scheduled backup: with `BACKUP_AGE_RECIPIENT` (an age public key) in
+  `backup.env`, only `backup.tar.age` and its `SHA256SUMS` leave the host, and only the private key's holder can
+  read them (`age -d -i <key> backup.tar.age | tar -x`). Needs `age` on the host; optional, and without it the
+  backup is copied as before. The smoke test checks that only the archive leaves, that the key opens it into the
+  backup `scripts/restore.sh` reads, and that another key doesn't.
 
 ### Changed
 
@@ -181,6 +186,8 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Fixed
 
+- CI's smoke test always logs out of Docker Hub after pulling the images, also when it pulled anonymously on a runner
+  image that comes with a Docker Hub entry of its own.
 - `scripts/restore.sh` stops a service that bind-mounts a folder inside a mount it restores, and starts it again
   afterwards: such a container kept seeing the folder the restore had replaced (found with Steerhouse's worker, which
   reads the API's Galaxy folder).

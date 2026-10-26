@@ -15,7 +15,7 @@ the secure design principles it follows, and how common weaknesses are countered
 | The web UIs | Someone on the LAN uses a service | LAN only, behind a reverse proxy's access lists; every login the service offers turned on ([installing.md](installing.md#running-it-securely)) |
 | Indexer credentials, logins | Committed to the public repository | Kept in the services' data, never in the repo; `.gitignore`; GitHub push protection; gitleaks over the history in CI |
 | The hosts Dozzle's agents run on | Someone on the LAN connecting their own Dozzle to an agent, as the hub | Dozzle and its agents accept only a peer presenting the homelab's own certificate and key (Docker secrets owned by root, never committed or backed up), never the pair built into every Dozzle image, and Dozzle doesn't start without them; the smoke test proves Dozzle reaches an agent with the pair and not one with the built-in pair |
-| Indexer credentials, logins | Leaked through a backup or Dozzle's log view | `scripts/backup.sh` writes backups readable only by the user who ran it, documented as secret, to be kept off the host; Dozzle treated as admin access |
+| Indexer credentials, logins | Leaked through a backup or Dozzle's log view | `scripts/backup.sh` writes backups readable only by the user who ran it, documented as secret, to be kept off the host; the scheduled copy off the host can be encrypted with age to a key that isn't on the host (`BACKUP_AGE_RECIPIENT`); Dozzle treated as admin access |
 | The services' data | An upgrade that migrates and breaks it (including a Minecraft world opened by a newer server) | Backup before every update merged by hand, nightly otherwise; rollback = a revert (or the old tag) + `scripts/restore.sh`, exercised by the CI smoke test against the real stack; the Minecraft server version changes only by hand |
 | The host | A bad change merged to `main` deploying by itself | The required checks (policy check, smoke test) pass before any merge; the Minecraft server's version is changed by hand, and Dependabot's majors deploy unattended with the nightly backup behind them; the pull agent only fast-forwards and backs out a change that doesn't resolve or pull; rollback is a revert pull request |
 | The services' data | A crafted backup writing outside the services' data | `restore.sh` verifies `SHA256SUMS` (which covers the `MANIFEST`), accepts only plain archive names and absolute container paths without `..`, and writes only a mount the service has read-write and doesn't exclude from backups |
@@ -79,9 +79,9 @@ on the host, or write access to `.env` or the services' data.
 - CI on every change: ruff (with the bandit rules), yamllint, actionlint, gitleaks over the history,
   shellcheck, pytest with a 90 % branch-coverage floor, `docker compose config`, the policy check, and a smoke
   test on amd64 that starts every pinned image, waits for its health check, round-trips a backup and restore,
-  checks that excluded mounts are left alone, runs the scheduled backup against a stand-in backup server, and
-  checks that autoheal restarts an unhealthy container (a dynamic test
-  of the stack and the scripts).
+  checks that excluded mounts are left alone, runs the scheduled backup against a stand-in backup server, checks
+  the encrypted copy off the host (only the archive leaves, the right key opens it, another doesn't), and checks
+  that autoheal restarts an unhealthy container (a dynamic test of the stack and the scripts).
 - A weekly Trivy scan of every pinned image, and on every change to `compose.yaml` on `main`, into code scanning.
 - CodeQL (Python and Actions) on every pull request and weekly; OpenSSF Scorecard weekly; dependency
   review on every pull request.

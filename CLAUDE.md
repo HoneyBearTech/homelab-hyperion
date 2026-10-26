@@ -100,6 +100,8 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
 - **Nightly backups as on ares and helios** (owner 2026-10-13): `scripts/scheduled-backup.sh` from a systemd user
   timer at 04:30, rsync to the backup server (keep 3 here, 30 there), Uptime Kuma push. `backup.sh` stops one
   service at a time. The backup server's name lives only in the host's `~/.ssh/config` and `backup.env`, never here.
+  With `BACKUP_AGE_RECIPIENT` in `backup.env` (optional, empty by default), only `backup.tar.age` + `SHA256SUMS`,
+  encrypted to that age key, leave the host; CI installs age so the smoke test covers it.
 - **Every service has a health check** and the `autoheal: "true"` label (autoheal itself excepted, as on atlas).
 - **qBittorrent's hold was lifted** (owner 2026-10-22; it was held at 4.5.5 from 2026-10-14): it runs 5.3.0 on
   libtorrent 2.1, and Dependabot no longer ignores it. Its downloads may be on a network share, so it must never
