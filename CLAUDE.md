@@ -85,13 +85,12 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   2026-10-22): it stores the SSH keys and vault passwords of the machines it manages. Its secrets are Docker secret
   files in `CONFIG_ROOT/steerhouse/secrets` (never in the repo, `.env` or the backups; `credential_encryption_key`
   lives in the owner's password manager), its tokens (`WORKER_TOKEN`, `METRICS_TOKEN`) in `steerhouse.env`. Only the
-  database and the API get secrets; the worker gets none and only the `steerhouse-workers` network. For Argus (on
-  Ares; owner 2026-10-22) the API's metrics port is published (token-protected) and so is Postgres, **TLS only**:
-  `pg_hba` (`PG_HBA` in compose) admits remote logins for the read-only role `grafana_ro` over `hostssl` only, the
-  app's user `steerhouse` only from `steerhouse-db` (fixed range `STEERHOUSE_DB_SUBNET`), and rejects everything
-  else; the certificate is from the owner's own CA (`scripts/steerhouse.sh`). Never loosen that, and never give
-  another role remote access. The smoke test proves it (`scripts/smoke-stack.sh`). PostgreSQL majors are ignored by
-  Dependabot (a major can't open the old data): a hand-made PR with a dump and restore.
+  API gets secrets; the worker gets none and only the `steerhouse-workers` network. Its database is on the homelab's
+  database server (homelab-mnemosyne; moved 2026-10-26, the in-stack `steerhouse-postgres` removed after the two-week
+  rollback window), reached with `database_url` over TLS (`sslmode=require`) as a login that is no superuser; the
+  read-only role `grafana_ro` is made there, and `scripts/steerhouse.sh grafana-role` grants it the `analytics` views
+  (`analytics-grant`, `analytics-check`). For Argus (on Ares; owner 2026-10-22) the API's metrics port is published
+  (token-protected). The smoke test proves the logins' rights against a stand-in server (`scripts/smoke-stack.sh`).
 - **Dozzle never uses the certificate built into every Dozzle image** (2026-10-23): it and its agents (homelab-atlas,
   -deimos, -helios) share one pair of the owner's, Docker secret files in `CONFIG_ROOT/dozzle/certs` on each host
   (owned by root, never in the repo, `.env` or the backups; copy in the owner's password manager). Dozzle doesn't

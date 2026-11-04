@@ -96,10 +96,10 @@ docker compose ps
 
 Then sign in to each service: Prowlarr should list its indexers and apps, qBittorrent its torrents, Heimdall its
 links, the Minecraft server should load its worlds, and Steerhouse should list its projects and decrypt a
-credential (run a playbook that uses one). Its database's certificate comes back with the database; if the new host
-has another name or address, sign a new one for it (`scripts/steerhouse.sh sign`) with the same CA, which Argus
-already trusts. A Minecraft release older than the backup's can't open
-its worlds: check out that release or a newer one.
+credential (run a playbook that uses one). Its database is on the database server, not in the backup: put
+`database_url` back with the other secrets, and if the new host has another address, let it connect there
+(`pg_hba.conf`). A Minecraft release older than the backup's can't open its worlds: check out that release or a newer
+one.
 
 ## What the backup doesn't bring back
 

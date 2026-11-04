@@ -23,7 +23,8 @@ adopting the existing data, ports and download paths.
 | autoheal | `willfarrell/autoheal` | Restarts any container labelled `autoheal: "true"` that Docker reports unhealthy |
 | socket proxy | linuxserver.io | Gives autoheal a filtered Docker API (list, inspect, restart, stop) instead of the socket |
 | Steerhouse (`steerhouse`, `steerhouse-worker`, `steerhouse-frontend`) | the project's own images (amd64 only) | Runs Ansible playbooks from a web UI against the homelab's machines over SSH: the API, the workers that run the playbooks (each run as an unprivileged user, kept from the API and cloud metadata by a firewall in the worker's network namespace) and the web UI |
-| Steerhouse's database (`steerhouse-postgres`) | the official `postgres` image | Steerhouse's PostgreSQL; also serves Argus' Grafana the read-only `analytics` views, over TLS |
+
+Steerhouse's database is in PostgreSQL on a database server outside this stack.
 
 Other services on the same host (a media server, a transcoder, monitoring agents, a Docker management agent)
 come from their own projects; this stack doesn't include or manage them.
@@ -43,7 +44,7 @@ come from their own projects; this stack doesn't include or manage them.
 | Minecraft players | Connect to the Bedrock server: a NetherNet handshake on TCP 19132, then gameplay on a UDP port from 19140–19149 |
 | autoheal | Watches health through the socket proxy and restarts unhealthy containers |
 | Steerhouse users | Run playbooks and manage inventories, credentials and schedules in Steerhouse's web UI, through the reverse proxy (HTTPS) |
-| Argus (another host) | Its Prometheus scrapes Steerhouse's metrics (with a token); its Grafana reads Steerhouse's `analytics` views as `grafana_ro`, over TLS |
+| Argus (another host) | Its Prometheus scrapes Steerhouse's metrics (with a token); its Grafana reads Steerhouse's `analytics` views as `grafana_ro` on the database server |
 
 ## Data flow
 
@@ -61,9 +62,9 @@ Dozzle ──Docker socket (read-only mount)──▶ Docker API
 Dozzle ──agent protocol──▶ Dozzle agents on other hosts (optional)
 autoheal ──filtered API──▶ socket proxy ──▶ Docker socket
 
-LAN clients ──HTTPS via reverse proxy──▶ Steerhouse web UI ──▶ Steerhouse API ──▶ Steerhouse's database
+LAN clients ──HTTPS via reverse proxy──▶ Steerhouse web UI ──▶ Steerhouse API ──TLS──▶ database server
 Steerhouse workers ──internal API──▶ Steerhouse API;  workers (playbooks) ──SSH──▶ the machines they manage
-Argus' Prometheus ──HTTP + token──▶ Steerhouse metrics;  Argus' Grafana ──TLS, grafana_ro──▶ Steerhouse's database
+Argus' Prometheus ──HTTP + token──▶ Steerhouse metrics;  Argus' Grafana ──grafana_ro──▶ database server
 ```
 
 Each service keeps its settings and database in its own folder on the host, `CONFIG_ROOT/<app>/config` (see
