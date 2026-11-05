@@ -26,10 +26,11 @@ live. The reasoning behind these requirements is in the [assurance case](assuran
    paths or player names are committed. Examples use placeholders.
 5. **Releases are verifiable.** Release files are listed in a `SHA256SUMS` signed keylessly by the release
    workflow, with SLSA provenance and an SBOM of the pinned images ([verifying-releases.md](verifying-releases.md)).
-6. **Steerhouse's database admits nobody from outside but the read-only role, and only over TLS.** Its own user
-   connects only from its internal network (`steerhouse-db`); from anywhere else, only `grafana_ro`, which can read
-   the `analytics` views and nothing else, and only over TLS 1.3 with a certificate from the maintainer's own CA.
-   The API's metrics answer only with a token. The smoke test proves each of these.
+6. **Steerhouse reaches its database with a login that is no superuser, and Grafana's role reads only the
+   `analytics` views.** The database is on a database server outside this stack, which admits the logins and
+   requires TLS; Steerhouse's login owns its own database only, and `grafana_ro` can read the `analytics` views and
+   nothing else. The API's metrics answer only with a token. The smoke test proves each of these against a stand-in
+   server.
 7. **Backups don't leak and can't reach the downloads.** `scripts/backup.sh` writes archives readable only by
    the user who ran it (the scheduled copy off the host keeps those modes). With `BACKUP_AGE_RECIPIENT` set, that
    copy is encrypted to an age key whose private half isn't on this host, so the backup server holds nothing it can
@@ -77,20 +78,19 @@ cleanly without it.
 | minecraft | `SETUID`, `SETGID` | yes (`/tmp` in memory) | Its entrypoint starts as root and switches to `UID`:`GID` before it downloads or runs the server; the server and the world are in its data mount |
 | autoheal | none | yes | Only talks to the socket proxy |
 | socket-proxy | none | yes (`/run`, `/tmp` in memory) | Only reads the socket |
-| steerhouse-postgres | none | yes (`/tmp`, `/var/run/postgresql` in memory) | Runs as `PUID`:`PGID` (the image supports any user), so its entrypoint never needs root; the database and its certificate are in its mount |
-| steerhouse | none | yes (`/tmp` in memory) | Runs as `PUID`:`PGID`; everything it keeps is in its mount and the database. Its `HOME` is `/tmp`, where Ansible keeps its working files (`~/.ansible`) |
+| steerhouse | none | yes (`/tmp` in memory) | Runs as `PUID`:`PGID`; everything it keeps is in its mount and its database on the database server. Its `HOME` is `/tmp`, where Ansible keeps its working files (`~/.ansible`) |
 | steerhouse-worker | `SETUID`, `SETGID`, `CHOWN`, `KILL`, `NET_ADMIN` (allowed by label) | yes (`/tmp` in memory) | As Steerhouse ships it: root with only these, to run each slot's playbooks as a user of its own (`SETUID`, `SETGID`), give them their home directories (`CHOWN`) and stop them (`KILL`), and install the egress filter in its own network namespace (`NET_ADMIN`, outside Docker's default set; playbooks never hold it). At most 1024 processes. It has no secrets and only the API's internal port |
 | steerhouse-frontend | none | no | nginx as an unprivileged user on port 8080. Its entrypoint writes the trusted-proxy settings into `/etc/nginx/conf.d` when it starts, so the root stays writable |
 
 The root inside a container without capabilities can only reach what it owns. Data adopted from another
 installation must therefore be owned as each image expects: the linuxserver.io services' and the Minecraft
-server's and Steerhouse's (and Steerhouse's secrets and its database's key) by `PUID`:`PGID`, Dozzle's by root; a service that fails with "permission denied" (`EACCES`) on its
-first start usually has data with an unexpected owner.
+server's and Steerhouse's (and Steerhouse's secrets) by `PUID`:`PGID`, Dozzle's by root; a service that fails with
+"permission denied" (`EACCES`) on its first start usually has data with an unexpected owner.
 
 ## What it doesn't protect
 
-- **The services themselves.** A vulnerability in Prowlarr, qBittorrent, Heimdall, Dozzle, Steerhouse, PostgreSQL,
-  autoheal or the Minecraft server is that project's to fix; homelab-hyperion ships the fixed version once it's released
+- **The services themselves.** A vulnerability in Prowlarr, qBittorrent, Heimdall, Dozzle, Steerhouse, autoheal or
+  the Minecraft server is that project's to fix; homelab-hyperion ships the fixed version once it's released
   ([dependencies.md](dependencies.md)).
 - **What qBittorrent downloads and shares.** The content, and what sharing it means where you live, are the
   operator's responsibility. Peers see the host's public IP address; this stack doesn't hide it.
@@ -126,9 +126,8 @@ first start usually has data with an unexpected owner.
 | Indexer credentials and API keys; the media apps' API keys | Prowlarr's data | same |
 | autoheal's notification webhook URL (optional) | the gitignored `autoheal.env`, mode `600` | same |
 | Dozzle's key, which its agents accept as the hub's (whoever holds it can read every agent's host's logs and control its Docker) | `CONFIG_ROOT/dozzle/certs/dozzle_key.pem` (root, mode `600`) and the password manager | the repository, `.env`, issues, logs you paste, the stack's backups |
-| Steerhouse's database password, session key, admin password, `grafana_ro`'s password and `credential_encryption_key` (which encrypts every SSH key, vault password and token it stores) | files in `CONFIG_ROOT/steerhouse/secrets` (mode `700`, files `600`), mounted read-only as Docker secrets into the database and the API only; copies in the maintainer's password manager | the repository, `.env`, the stack's backups, issues, logs you paste |
+| Steerhouse's database URL (with its login's password), session key, admin password and `credential_encryption_key` (which encrypts every SSH key, vault password and token it stores) | files in `CONFIG_ROOT/steerhouse/secrets` (mode `700`, files `600`), mounted read-only as Docker secrets into the API only; copies in the maintainer's password manager | the repository, `.env`, the stack's backups, issues, logs you paste |
 | Steerhouse's `WORKER_TOKEN` and `METRICS_TOKEN` | the gitignored `steerhouse.env`, mode `600` (the metrics token also in Argus' Prometheus) | the repository, `.env`, issues, logs you paste |
-| The key of Steerhouse's database certificate, and its CA's key | `CONFIG_ROOT/steerhouse-postgres/config/tls/server.key` (mode `600`, backed up with the database); the CA's key off the host | the repository, issues |
 | The backup push monitor's URL | `backup.env` (mode `600`, gitignored) | the repository, issues, logs you paste |
 | The key for the backup server | the stack user's `~/.ssh` on the host, restricted on the server to this host | same |
 | The age private key for the backups (`BACKUP_AGE_RECIPIENT`) | off this host, with the operator's recovery secrets | this host, the backup server, anywhere public |

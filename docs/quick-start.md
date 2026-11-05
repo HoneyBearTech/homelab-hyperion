@@ -35,13 +35,13 @@ user in the `docker` group, and the host ports the services use free ([installin
 
    ```sh
    . ./.env && mkdir -p "$DOWNLOADS_PATH" "$INCOMPLETE_PATH"
-   for app in prowlarr qbittorrent heimdall minecraft steerhouse steerhouse-postgres; do
+   for app in prowlarr qbittorrent heimdall minecraft steerhouse; do
      mkdir -p "$CONFIG_ROOT/$app/config"
    done
    ```
 
-   Then Steerhouse's secrets, tokens and database certificate, as [installing.md](installing.md#steerhouse) shows
-   (`scripts/steerhouse.sh`), and the certificate and key Dozzle shares with its agents, in
+   Then Steerhouse's database on your PostgreSQL server, its secrets and tokens, as
+   [installing.md](installing.md#steerhouse) shows (`scripts/steerhouse.sh`), and the certificate and key Dozzle shares with its agents, in
    `CONFIG_ROOT/dozzle/certs` and owned by root: Dozzle doesn't start without them
    ([installing.md](installing.md#dozzles-certificate)).
 
@@ -58,8 +58,8 @@ user in the `docker` group, and the host ports the services use free ([installin
    change it. In Prowlarr, set a login, add your indexers and connect the media apps. The Minecraft server's
    allowlist is on: until you name the players, nobody can join. Add each one with
    `docker compose exec minecraft send-command allowlist add "<gamer tag>"`. Players add the server by this host's
-   address and port 19132; it doesn't appear in their LAN list. For Steerhouse, create the role Argus' Grafana
-   uses (`scripts/steerhouse.sh grafana-role`), put it behind the reverse proxy and sign in as `admin`
+   address and port 19132; it doesn't appear in their LAN list. For Steerhouse, let the role Argus' Grafana
+   uses read the `analytics` views (`scripts/steerhouse.sh grafana-role`), put it behind the reverse proxy and sign in as `admin`
    ([installing.md](installing.md#steerhouse)).
 
 To upgrade later, follow [upgrading.md](upgrading.md); it starts with a backup.

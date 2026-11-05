@@ -5,10 +5,14 @@
 # (work, project, root, busybox, compose, fail). Written for bash 3.2 and later (macOS ships 3.2).
 # shellcheck shell=bash disable=SC2154 # work, project, root and busybox come from smoke-test.sh
 
-# Steerhouse: its secrets and tokens, and its database's certificate from a throwaway CA, all made with
-# scripts/steerhouse.sh as on the host; then its read-only role for Argus (grafana_ro), what that role and a client
-# outside Steerhouse's own networks can and can't do in the database, the metrics token, and that the worker sees the
-# API's Galaxy folder.
+# Steerhouse: its secrets and tokens, made with scripts/steerhouse.sh as on the host, and a throwaway PostgreSQL in the
+# stack standing in for the database server, set up as docs/installing.md has its administrator do it: Steerhouse's
+# login owns its database and is no superuser, grafana_ro is made there, and the network admits TLS only (the image's
+# own self-signed certificate). Then that grafana_ro reads the analytics views and nothing else once
+# scripts/steerhouse.sh grafana-role ran, the metrics token, and that the worker sees the API's Galaxy folder.
+steerhouse_db=steerhouse-test-db
+
+# The PostgreSQL the database server runs, pinned like busybox in lib.sh (bumped by hand, docs/dependencies.md).
 steerhouse_pg=postgres:18.6-trixie@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
 
 # Dozzle: a throwaway certificate and key, made with `dozzle generate-certs` as on the host and owned by root as there,
@@ -28,36 +32,90 @@ for host in json.loads(match.group(1))["hosts"] if match else []:
 }
 
 smoke_prepare() {
-  local config_root puid pgid made dozzle_image
+  local config_root puid pgid made app grafana admin dozzle_image
   config_root=$(sed -n 's/^CONFIG_ROOT=//p' "$work/env")
   puid=$(sed -n 's/^PUID=//p' "$work/env")
   pgid=$(sed -n 's/^PGID=//p' "$work/env")
   made=$work/steerhouse
-  mkdir -p "$made"
+  mkdir -p "$made/db/initdb"
   "$root/scripts/steerhouse.sh" secrets "$made/secrets" >/dev/null
   "$root/scripts/steerhouse.sh" env "$made/steerhouse.env" >/dev/null
-  "$root/scripts/steerhouse.sh" ca "$made/ca" >/dev/null
-  "$root/scripts/steerhouse.sh" request "$made/tls" >/dev/null
-  "$root/scripts/steerhouse.sh" sign "$made/ca" "$made/tls/server.csr" "$made/tls/server.crt" steerhouse-postgres \
-    >/dev/null
-  cp "$made/ca/ca.crt" "$made/tls/ca.crt"
-  # Into CONFIG_ROOT as on the host: owned by PUID:PGID (the user both services run as), the folders mode 0755 and the
-  # secrets' and the key's 0700/0600. CONFIG_ROOT belongs to PUID, who may not be the caller: copied as root.
+  app=$(openssl rand -hex 24)
+  grafana=$(openssl rand -hex 24)
+  admin=$(openssl rand -hex 24)
+  printf '%s\n' "$app" >"$made/db/app_password"
+  printf '%s\n' "$grafana" >"$made/db/grafana_password"
+  # database_url as the installing docs have the user write it, with the login the server's administrator made.
+  (umask 077 && printf 'postgresql+psycopg://steerhouse:%s@%s:5432/steerhouse?sslmode=require\n' "$app" \
+    "$steerhouse_db" >"$made/secrets/database_url")
+  # The database server's side, in its administrator's words (docs/installing.md#steerhouse); run once, as the image's
+  # superuser, when the server starts with an empty data directory. The socket trusts the container's own users; over
+  # the network, only the two logins, and only with TLS.
+  cat >"$made/db/initdb/steerhouse.sql" <<SQL
+CREATE ROLE steerhouse LOGIN PASSWORD '$app';
+CREATE DATABASE steerhouse OWNER steerhouse;
+CREATE ROLE grafana_ro WITH LOGIN NOINHERIT CONNECTION LIMIT 10 PASSWORD '$grafana';
+ALTER ROLE grafana_ro SET default_transaction_read_only = on;
+ALTER ROLE grafana_ro SET statement_timeout = '30s';
+ALTER ROLE grafana_ro SET search_path = analytics;
+GRANT CONNECT ON DATABASE steerhouse TO grafana_ro;
+SQL
+  printf '%s\n' 'local all all trust' 'hostssl steerhouse steerhouse all scram-sha-256' \
+    'hostssl steerhouse grafana_ro all scram-sha-256' 'host all all all reject' >"$made/db/pg_hba.conf"
+  chmod 755 "$made/db" "$made/db/initdb"
+  chmod 644 "$made/db/pg_hba.conf" "$made/db/initdb/steerhouse.sql"
+  # Into CONFIG_ROOT as on the host: owned by PUID:PGID (the user the API runs as), the folders mode 0755 and the
+  # secrets' 0700/0600. CONFIG_ROOT belongs to PUID, who may not be the caller: copied as root.
   docker run --rm --network none -v "$config_root:/c" -v "$made:/made:ro" "$busybox" sh -c '
     set -e
-    mkdir -p /c/steerhouse/config /c/steerhouse-postgres/config
+    mkdir -p /c/steerhouse/config
     cp -R /made/secrets /c/steerhouse/secrets
-    cp -R /made/tls /c/steerhouse-postgres/config/tls
-    chown -R "$1:$2" /c/steerhouse /c/steerhouse-postgres
-    chmod 0755 /c/steerhouse /c/steerhouse/config /c/steerhouse-postgres /c/steerhouse-postgres/config' \
+    chown -R "$1:$2" /c/steerhouse
+    chmod 0755 /c/steerhouse /c/steerhouse/config' \
     own "$puid" "${pgid:-$puid}" </dev/null
-  # steerhouse.env in place of the real one, which the smoke test never reads.
-  {
-    echo "services:"
-    for service in steerhouse steerhouse-worker; do
-      printf '  %s:\n    env_file: !override\n      - %s\n' "$service" "$made/steerhouse.env"
-    done
-  } >"$work/override-stack.yaml"
+  # steerhouse.env in place of the real one, which the smoke test never reads, and the stand-in database server, on the
+  # network the API reaches its server over, with its data in memory: nothing in it is backed up or restored.
+  cat >"$work/override-stack.yaml" <<YAML
+services:
+  steerhouse:
+    env_file: !override
+      - $made/steerhouse.env
+    depends_on:
+      $steerhouse_db:
+        condition: service_healthy
+  steerhouse-worker:
+    env_file: !override
+      - $made/steerhouse.env
+  $steerhouse_db:
+    image: $steerhouse_pg
+    user: postgres
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    tmpfs: [/var/lib/postgresql, /var/run/postgresql, /tmp]
+    environment:
+      POSTGRES_PASSWORD: $admin
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+      - -c
+      - ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+      - -c
+      - hba_file=/etc/smoke/pg_hba.conf
+    volumes:
+      - $made/db/pg_hba.conf:/etc/smoke/pg_hba.conf:ro
+      - $made/db/initdb:/docker-entrypoint-initdb.d:ro
+    networks: [steerhouse-web]
+    healthcheck:
+      # Over TCP: the image runs the SQL above on a server that listens on its socket only, so this passes once the
+      # real server is up.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 2s
+      retries: 30
+YAML
 
   # Dozzle's pair, in its folder as root (CONFIG_ROOT belongs to PUID); generate-certs writes the key with mode 0600 and
   # the certificate with 0644, owned by root, the user it runs as.
@@ -87,43 +145,40 @@ smoke_prepare() {
 YAML
 }
 
-# psql in a throwaway container on Steerhouse's network $1, as user $2 with password $3 and the extra connection
-# settings $4, running the SQL $5; prints psql's output (and errors).
+# psql in a throwaway container on the network the API reaches its database server over, as user $1 with password $2
+# and the extra connection settings $3, running the SQL $4; prints psql's output (and errors).
 steerhouse_psql() {
-  docker run --rm --network "${project}_$1" -v "$work/steerhouse/tls/ca.crt:/ca.crt:ro" -e PGPASSWORD="$3" \
-    "$steerhouse_pg" psql "host=steerhouse-postgres dbname=steerhouse user=$2 connect_timeout=10 $4" \
-    -v ON_ERROR_STOP=1 -Atc "$5" </dev/null 2>&1
+  docker run --rm --network "${project}_steerhouse-web" -e PGPASSWORD="$2" "$steerhouse_pg" \
+    psql "host=$steerhouse_db dbname=steerhouse user=$1 connect_timeout=10 $3" -v ON_ERROR_STOP=1 -Atc "$4" \
+    </dev/null 2>&1
 }
 
 smoke_check() {
-  local made=$work/steerhouse grafana app metrics out tls hosts
-  grafana=$(cat "$made/secrets/grafana_db_password")
-  app=$(cat "$made/secrets/postgres_password")
+  local made=$work/steerhouse grafana app metrics out hosts
+  grafana=$(cat "$made/db/grafana_password")
+  app=$(cat "$made/db/app_password")
   metrics=$(sed -n 's/^METRICS_TOKEN=//p' "$made/steerhouse.env")
-  tls="sslmode=verify-full sslrootcert=/ca.crt"
 
-  echo "Steerhouse: creating grafana_ro (scripts/steerhouse.sh grafana-role)"
+  echo "Steerhouse: letting grafana_ro read the analytics views (scripts/steerhouse.sh grafana-role)"
   "$root/scripts/steerhouse.sh" grafana-role
 
-  # From steerhouse-postgres-lan, the network the published port is on (outside Steerhouse's own networks).
-  out=$(steerhouse_psql steerhouse-postgres-lan grafana_ro "$grafana" "$tls" \
+  # The API made its tables with a login that is no superuser, as on the database server.
+  out=$(steerhouse_psql steerhouse "$app" sslmode=require \
+    "SELECT rolsuper FROM pg_roles WHERE rolname = current_user; SELECT count(*) > 0 FROM pg_tables
+     WHERE schemaname = 'public'") || fail "Steerhouse's login can't connect over TLS: $out"
+  [ "$out" = $'f\nt' ] || fail "Steerhouse's login is a superuser, or it made no tables: $out"
+  out=$(steerhouse_psql grafana_ro "$grafana" sslmode=require \
     "SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid(); SELECT count(*) >= 0 FROM analytics.runs") ||
     fail "grafana_ro can't read analytics.runs over TLS: $out"
   [ "$out" = $'t\nt' ] || fail "grafana_ro's connection isn't encrypted, or analytics.runs is unreadable: $out"
-  out=$(steerhouse_psql steerhouse-postgres-lan grafana_ro "$grafana" sslmode=disable "SELECT 1") &&
-    fail "grafana_ro could connect without TLS"
-  [[ $out == *"pg_hba.conf rejects connection"*"no encryption"* ]] || fail "unexpected error without TLS: $out"
-  out=$(steerhouse_psql steerhouse-postgres-lan grafana_ro "$grafana" "$tls" "SELECT count(*) FROM public.users") &&
+  out=$(steerhouse_psql grafana_ro "$grafana" sslmode=require "SELECT count(*) FROM public.users") &&
     fail "grafana_ro can read public.users"
   [[ $out == *"permission denied"* ]] || fail "unexpected error reading public.users: $out"
-  out=$(steerhouse_psql steerhouse-postgres-lan grafana_ro "$grafana" "$tls" "CREATE TABLE analytics.smoke (x int)") &&
+  out=$(steerhouse_psql grafana_ro "$grafana" sslmode=require "CREATE TABLE analytics.smoke (x int)") &&
     fail "grafana_ro could create a table"
   [[ $out == *"read-only transaction"* || $out == *"permission denied"* ]] ||
     fail "unexpected error creating a table: $out"
-  out=$(steerhouse_psql steerhouse-postgres-lan steerhouse "$app" "$tls" "SELECT 1") &&
-    fail "the app's own user could connect from outside steerhouse-db"
-  [[ $out == *"pg_hba.conf rejects connection"* ]] || fail "unexpected error for the app's user: $out"
-  echo "Steerhouse: grafana_ro reads the analytics views over TLS only and nothing else; no other login from outside"
+  echo "Steerhouse: its login is no superuser; grafana_ro reads the analytics views and nothing else"
 
   # The metrics port, from the network the API's ports are published on.
   docker run --rm --network "${project}_steerhouse-web" "$busybox" \

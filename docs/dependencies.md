@@ -46,8 +46,8 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
 
 - **Dependabot** ([`.github/dependabot.yml`](../.github/dependabot.yml)) checks weekly for new image versions in the Compose file, new tool versions and new Action
   versions, and opens a pull request for each. Dependabot alerts and security updates are on.
-- The CI-only images in `run:` steps, the images in `.gitlab-ci.yml`, the scripts' busybox image and the
-  Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
+- The CI-only images in `run:` steps, the images in `.gitlab-ci.yml`, the scripts' busybox image, the smoke test's
+  stand-in PostgreSQL and the Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
   Minecraft server whenever players' clients need a newer one, since Bedrock clients usually join only a server
   of their own version). Nor are new qBittorrent versions: Dependabot only proposes rebuilds of qBittorrent's
   pinned tag ([below](#qbittorrent)), and a new version is bumped by hand when upstream releases one.
@@ -97,16 +97,13 @@ qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the ho
   1.2, which never maps files either and reads faster when seeding a lot, upstream says) are the fallback if
   seeding suffers, at the cost of BitTorrent v2 torrents.
 
-### Steerhouse and its PostgreSQL
+### Steerhouse
 
 Steerhouse's two images (`honeybeartech/steerhouse-backend`, which the API and the workers share, and
 `-frontend`) are published for `linux/amd64` only, signed, and scanned by Steerhouse's own release workflow;
 Dependabot bumps both together. A new Steerhouse version migrates its database when the API starts: read its
 release notes, and run `scripts/steerhouse.sh grafana-role` afterwards so that `grafana_ro` can read any new
-`analytics` view. Its database runs the official `postgres` image on a minor tag (`18.6-trixie`): Dependabot proposes
-the minors, which open the same data, and ignores the majors, because PostgreSQL 19 can't open version 18's data
-directory. A major upgrade is a pull request by hand, with a dump of the old database and a restore into the new
-one (or `pg_upgrade`), after a backup.
+`analytics` view. Its database is on the database server, whose PostgreSQL is upgraded there, not here.
 
 ## Policy for vulnerabilities in dependencies
 
@@ -146,7 +143,7 @@ Prowlarr (128, all 10 critical), the Minecraft image (39) and Heimdall (14: the 
 | Dozzle `v11.3.2` | 1 (0 after the rescan) | 1 | **Fixed by a bump** to `v11.3.4`, built with Go 1.27.3, which fixes CVE-2026-111943 in `crypto/x509`; a scan of `v11.3.4` finds nothing |
 | autoheal, socket-proxy | 0 | 0 | |
 | Steerhouse backend and frontend `0.11.0` | 0 | 0 | Scanned with the weekly scan's settings (Trivy 0.75.0, `linux/amd64`, HIGH and CRITICAL, fixed only) before the bump from `0.10.1` (2026-10-23) |
-| PostgreSQL `18.6-trixie` (Steerhouse's database) | 26 (1) | 26 | **Not reachable.** Every finding is in the Go standard library of `gosu` 1.24.6, which the image's entrypoint only runs when it starts as root, to drop to the `postgres` user; this stack runs it as `PUID`:`PGID`, so `gosu` never runs. Fixed when the image ships a newer `gosu` |
+| PostgreSQL `18.6-trixie` (Steerhouse's database) | 26 (1) | 26 | **Gone from the stack.** Steerhouse's database moved to the database server, and `steerhouse-postgres` was removed. Every finding was in the Go standard library of `gosu` 1.24.6, which the image's entrypoint only ran when it started as root; this stack ran it as `PUID`:`PGID`, so `gosu` never ran |
 
 **Every critical finding:**
 
