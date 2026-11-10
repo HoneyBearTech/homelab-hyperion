@@ -12,14 +12,19 @@ All notable changes to homelab-hyperion are documented here. The format follows
   pair on every agent, whose stacks need their own update: [docs/installing.md](docs/installing.md#dozzles-certificate)).
   Without them Dozzle doesn't start. Once Dozzle has its pair it reaches only the agents that have it too, so switch
   the agents and Dozzle one right after the other, Dozzle last.
-- **Steerhouse needs its secrets, tokens, certificate and settings on the host before this is deployed**
-  ([installing.md](docs/installing.md#steerhouse)). As the `PUID` user, in the checkout: create
-  `CONFIG_ROOT/steerhouse/config` and `CONFIG_ROOT/steerhouse-postgres/config`, run `scripts/steerhouse.sh secrets
-  "$CONFIG_ROOT/steerhouse/secrets"` and `scripts/steerhouse.sh env steerhouse.env`, issue the database's
-  certificate (`scripts/steerhouse.sh ca` once on another machine, `request` here, `sign` there), and save
-  `credential_encryption_key` in a password manager. Add the six `STEERHOUSE_*` settings to `.env` last: a deploy
+- **Steerhouse needs its database, secrets, tokens and settings before this is deployed**
+  ([installing.md](docs/installing.md#steerhouse)). On your PostgreSQL server, make Steerhouse's login and database
+  and the role `grafana_ro`. On the host, as the `PUID` user, in the checkout: create
+  `CONFIG_ROOT/steerhouse/config`, run `scripts/steerhouse.sh secrets "$CONFIG_ROOT/steerhouse/secrets"` and
+  `scripts/steerhouse.sh env steerhouse.env`, write `database_url` with the server's login, and save
+  `credential_encryption_key` in a password manager. Add the four `STEERHOUSE_*` settings to `.env` last: a deploy
   without them stops at `docker compose config` and changes nothing. After the deploy, run
   `scripts/steerhouse.sh grafana-role` and add the reverse proxy host.
+- **On a server that ran Steerhouse with its database in the stack (`steerhouse-postgres`), move the database to the
+  server first** (a `pg_dump` and `pg_restore`, then `database_url` pointed at it): deploying this removes the
+  `steerhouse-postgres` container. Its folder, `CONFIG_ROOT/steerhouse-postgres`, stays until you delete it, and the
+  backups stop archiving it. `STEERHOUSE_POSTGRES_PORT` and `STEERHOUSE_DB_SUBNET` in `.env`, and the secret files
+  `postgres_password` and `grafana_db_password`, are no longer read: remove them once nothing needs them.
 
 - **Add `INCOMPLETE_PATH` to `.env` before this is deployed** (required; see `.env.example`): the host directory
   qBittorrent keeps torrents in while they download, mounted at `/incomplete`. It must exist and be writable by
@@ -106,24 +111,24 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Added
 
--- Steerhouse 0.10.1 (Ansible playbooks from a web UI): its API (`steerhouse`), workers (`steerhouse-worker`), web
-  UI (`steerhouse-frontend`, on `STEERHOUSE_PORT`, for the reverse proxy) and PostgreSQL 18.6
-  (`steerhouse-postgres`), from Steerhouse's own deploy files without its `monitoring` profile. Data in
-  `CONFIG_ROOT/steerhouse/config` and `CONFIG_ROOT/steerhouse-postgres/config` (backed up, the database stopped while
-  it's copied); secrets as Docker secret files in `CONFIG_ROOT/steerhouse/secrets` (never backed up) and tokens in
-  the new `steerhouse.env` (template `steerhouse.env.example`). Six new required settings: `STEERHOUSE_PORT`,
-  `STEERHOUSE_PUBLIC_URL`, `STEERHOUSE_TRUSTED_PROXIES`, `STEERHOUSE_METRICS_PORT`, `STEERHOUSE_POSTGRES_PORT`,
-  `STEERHOUSE_DB_SUBNET`.
-- For Argus: Steerhouse's Prometheus metrics on `STEERHOUSE_METRICS_PORT` (with `METRICS_TOKEN`), and its database on
-  `STEERHOUSE_POSTGRES_PORT` for Grafana's read-only role `grafana_ro` (the `analytics` views), TLS 1.3 only, with a
-  certificate from your own CA.
-- `scripts/steerhouse.sh`: writes Steerhouse's secret files, `steerhouse.env`, a CA, the database's key and signing
-  request, and the certificate signed for it, so that no private key leaves the machine it was made on (never
-  replacing a file), and creates `grafana_ro` with Steerhouse's own setup command.
-- The smoke test runs a stack's own steps from `scripts/smoke-stack.sh`: here Steerhouse's throwaway secrets and
-  certificate, and checks that `grafana_ro` reads the `analytics` views over TLS and nothing else, that connections
-  without TLS and every other remote login are refused, that the metrics need the token and that the worker is
-  ready, before and after the restore. It also gives a `*_SUBNET` setting a free address range, makes the folder of
+-- Steerhouse 0.10.1 (Ansible playbooks from a web UI): its API (`steerhouse`), workers (`steerhouse-worker`) and web
+  UI (`steerhouse-frontend`, on `STEERHOUSE_PORT`, for the reverse proxy), from Steerhouse's own deploy files without
+  its database and its `monitoring` profile. Its database is in PostgreSQL on a database server, reached with the URL
+  in its `database_url` secret (with TLS). Data in `CONFIG_ROOT/steerhouse/config` (backed up); secrets as Docker
+  secret files in `CONFIG_ROOT/steerhouse/secrets` (never backed up) and tokens in the new `steerhouse.env` (template
+  `steerhouse.env.example`). Four new required settings: `STEERHOUSE_PORT`, `STEERHOUSE_PUBLIC_URL`,
+  `STEERHOUSE_TRUSTED_PROXIES`, `STEERHOUSE_METRICS_PORT`. (Until the database moved to the server, the stack ran it
+  as `steerhouse-postgres`, with a certificate from your own CA, `STEERHOUSE_POSTGRES_PORT` and
+  `STEERHOUSE_DB_SUBNET`; `scripts/steerhouse.sh` no longer has `ca`, `request` and `sign`.)
+- For Argus: Steerhouse's Prometheus metrics on `STEERHOUSE_METRICS_PORT` (with `METRICS_TOKEN`); its Grafana reads
+  the `analytics` views on the database server as the read-only role `grafana_ro`.
+- `scripts/steerhouse.sh`: writes Steerhouse's secret files (all but `database_url`, written by hand with the
+  database server's login) and `steerhouse.env` (never replacing a file), and lets `grafana_ro`, made on the database
+  server, read the `analytics` views with Steerhouse's own `analytics-grant` and `analytics-check`.
+- The smoke test runs a stack's own steps from `scripts/smoke-stack.sh`: here Steerhouse's throwaway secrets and a
+  throwaway PostgreSQL standing in for the database server, and checks that Steerhouse's login is no superuser and
+  made its tables, that `grafana_ro` reads the `analytics` views over TLS and nothing else, that the metrics need the
+  token and that the worker is ready, before and after the restore. It also gives a `*_SUBNET` setting a free address range, makes the folder of
   a service that runs as `user: PUID:PGID`, and leaves services with Docker secrets out of the restore's
   recreated-container check.
 

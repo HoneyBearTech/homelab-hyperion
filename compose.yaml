@@ -232,79 +232,14 @@ services:
       - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/minecraft/config:/data
 
   # --- Steerhouse (Ansible playbooks from a web UI) -------------------------------------------------------------
-  # From Steerhouse's own deploy/compose.yaml (v0.11.0), without its `monitoring` profile: Argus, on another host,
-  # scrapes the API's metrics and reads the read-only `analytics` views over the LAN. Steerhouse holds the SSH keys
-  # and vault passwords of the machines it manages: only the database and the API get its secrets (Docker secrets,
-  # files under CONFIG_ROOT/steerhouse/secrets, never backed up with the data), the workers none.
-  # Networks: steerhouse-web (the web UI and the API), steerhouse-db (internal: the API and the database),
-  # steerhouse-workers (the workers and the API's internal port; not internal, as playbooks reach the LAN over SSH)
-  # and steerhouse-postgres-lan (the database alone, so its TLS port can be published).
-
-  # The database. Runs as PUID:PGID (the image supports any user), so it needs no capability. Remote connections must
-  # use TLS and may only log in as the read-only role grafana_ro; the app's own user, steerhouse, may only connect
-  # from steerhouse-db (pg_hba.conf, from PG_HBA below). The certificate and key are in its folder, beside the
-  # database (docs/installing.md#steerhouse).
-  steerhouse-postgres:
-    <<: *hardened
-    image: postgres:18.6-trixie@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
-    container_name: steerhouse-postgres
-    user: ${PUID:?set PUID in .env}:${PGID:?set PGID in .env}
-    # The database is in its mount; the socket and the generated pg_hba.conf are in memory.
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/run/postgresql
-    restart: unless-stopped
-    stop_grace_period: 1m
-    labels:
-      autoheal: "true"
-    healthcheck:
-      <<: *healthcheck
-      test: ["CMD", "pg_isready", "-h", "/var/run/postgresql", "-U", "steerhouse", "-d", "steerhouse"]
-    # Writes PG_HBA to pg_hba.conf before the image's own entrypoint starts the server. It comes from the environment,
-    # not a Compose config, so that a change to it recreates the container on deploy.
-    entrypoint:
-      - /bin/sh
-      - -c
-      - umask 077 && printf '%s' "$$PG_HBA" >/tmp/pg_hba.conf && exec docker-entrypoint.sh "$$@"
-      - steerhouse-postgres
-    command:
-      - postgres
-      - -c
-      - hba_file=/tmp/pg_hba.conf
-      - -c
-      - ssl=on
-      - -c
-      - ssl_cert_file=/var/lib/postgresql/tls/server.crt
-      - -c
-      - ssl_key_file=/var/lib/postgresql/tls/server.key
-      - -c
-      - ssl_min_protocol_version=TLSv1.3
-    environment:
-      POSTGRES_USER: steerhouse
-      POSTGRES_DB: steerhouse
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      # Byte-order text sorting, independent of the host's glibc/ICU.
-      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale-provider=builtin --builtin-locale=C.UTF-8
-      # First match wins. The socket (docker compose exec, the health check) is the container's own; steerhouse only
-      # from steerhouse-db, whose range is fixed for this (STEERHOUSE_DB_SUBNET); grafana_ro over TLS from anywhere;
-      # everything else, and every connection without TLS from outside steerhouse-db, is refused.
-      PG_HBA: |
-        # TYPE   DATABASE    USER        ADDRESS                     METHOD
-        local    all         all                                     trust
-        host     steerhouse  steerhouse  ${STEERHOUSE_DB_SUBNET:?set STEERHOUSE_DB_SUBNET in .env}  scram-sha-256
-        hostssl  steerhouse  grafana_ro  all                         scram-sha-256
-        host     all         all         all                         reject
-    secrets:
-      - source: steerhouse_postgres_password
-        target: postgres_password
-    ports:
-      - "${STEERHOUSE_POSTGRES_PORT:?set STEERHOUSE_POSTGRES_PORT in .env}:5432"
-    volumes:
-      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse-postgres/config:/var/lib/postgresql
-    networks:
-      - steerhouse-db
-      - steerhouse-postgres-lan
+  # From Steerhouse's own deploy/compose.yaml (v0.11.0), without its database and its `monitoring` profile: the
+  # database is on a PostgreSQL server outside this stack, which the API reaches with the URL in its database_url
+  # secret (docs/installing.md#steerhouse); Argus, on another host, scrapes the API's metrics and reads the read-only
+  # `analytics` views on that server. Steerhouse holds the SSH keys and vault passwords of the machines it manages:
+  # only the API gets its secrets (Docker secrets, files under CONFIG_ROOT/steerhouse/secrets, never backed up with
+  # the data), the workers none.
+  # Networks: steerhouse-web (the web UI and the API; the API's way to its database server) and steerhouse-workers
+  # (the workers and the API's internal port; not internal, as playbooks reach the LAN over SSH).
 
   # The API. Runs as PUID:PGID with no capabilities; its data (playbooks, run logs, Galaxy content, git checkouts) is
   # in /data, everything else in the database. The metrics port is published for Argus' Prometheus and answers only
@@ -352,8 +287,7 @@ services:
     env_file:
       - path: steerhouse.env
         required: false
-    # Read from /run/secrets/<name>. grafana_db_password only for the one-off command that creates the role
-    # grafana_ro (docs/installing.md#steerhouse).
+    # Read from /run/secrets/<name>.
     secrets:
       - source: steerhouse_database_url
         target: database_url
@@ -363,8 +297,6 @@ services:
         target: credential_encryption_key
       - source: steerhouse_admin_password
         target: admin_password
-      - source: steerhouse_grafana_db_password
-        target: grafana_db_password
     ports:
       - "${STEERHOUSE_METRICS_PORT:?set STEERHOUSE_METRICS_PORT in .env}:8002"
     volumes:
@@ -373,11 +305,7 @@ services:
       steerhouse-web:
         # The web UI's nginx sends the API's requests to "backend".
         aliases: [backend]
-      steerhouse-db: {}
       steerhouse-workers: {}
-    depends_on:
-      steerhouse-postgres:
-        condition: service_healthy
 
   # Runs the playbooks. Root with only these capabilities, as Steerhouse ships it: it runs each slot's playbooks as a
   # user of its own (SETUID, SETGID; CHOWN for their home directories; KILL to stop them) and keeps them away from the
@@ -550,19 +478,11 @@ networks:
   # proxy; only autoheal joins it.
   docker-proxy:
     internal: true
-  # Steerhouse's web UI and API. Not internal: the API fetches Galaxy content and git repositories, and sends mail.
+  # Steerhouse's web UI and API. Not internal: the API reaches its database server, fetches Galaxy content and git
+  # repositories, and sends mail.
   steerhouse-web: {}
-  # Steerhouse's API and database, with no way out. Its address range is fixed so that pg_hba.conf can tell the app's
-  # connections from the LAN's.
-  steerhouse-db:
-    internal: true
-    ipam:
-      config:
-        - subnet: ${STEERHOUSE_DB_SUBNET:?set STEERHOUSE_DB_SUBNET in .env}
   # Steerhouse's workers and the API's internal port. Not internal: playbooks reach the machines they manage.
   steerhouse-workers: {}
-  # The database alone, so its port can be published (an internal network can't publish one).
-  steerhouse-postgres-lan: {}
 
 # Steerhouse's secrets, as files on the host (docs/installing.md#steerhouse); Compose mounts each read-only at
 # /run/secrets/<target> in the services that list it. Never committed, and never in the stack's backups: keep them,
@@ -573,8 +493,6 @@ networks:
 # is missing, so it never falls back to the built-in pair. Never committed or backed up either: keep the key in the
 # password manager too.
 secrets:
-  steerhouse_postgres_password:
-    file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/postgres_password
   steerhouse_database_url:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/database_url
   steerhouse_auth_secret_key:
@@ -583,8 +501,6 @@ secrets:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/credential_encryption_key
   steerhouse_admin_password:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/admin_password
-  steerhouse_grafana_db_password:
-    file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/steerhouse/secrets/grafana_db_password
   dozzle_cert:
     file: ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/dozzle/certs/dozzle_cert.pem
   dozzle_key:
