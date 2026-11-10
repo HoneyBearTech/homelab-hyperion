@@ -169,7 +169,7 @@ homelab-atlas is the reference for Dozzle and for autoheal behind a socket proxy
   `smoke_prepare` and `smoke_check`). The hooks that call it, the `*_SUBNET` setting rule, `user: PUID:PGID` folders
   and skipping services with Docker secrets in the restore's "moved" check are generic `smoke-test.sh` changes, and
   `restore.sh` stopping and restarting a service that bind-mounts a folder inside restored data a generic
-  `restore.sh` change (2026-10-22), still to be ported to ares.
+  `restore.sh` change (2026-10-22). All of them are in ares too (checked 2026-11-10; ares #28 and #49).
 - GitLab copy: the owner's self-hosted GitLab (CE, LAN only; host facts in Chronos) is to hold a mirror. GitHub
   stays the home (OpenSSF badges, Scorecard, Dependabot, releases); every change goes to GitHub as a PR, never to
   GitLab. `.gitlab-ci.yml` mirrors GitHub on a schedule (fast-forward only, `MIRROR_TOKEN` CI/CD variable) and
