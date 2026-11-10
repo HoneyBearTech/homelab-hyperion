@@ -123,10 +123,18 @@ YAML
   docker run --rm --network none -v "$config_root:/c" "$busybox" mkdir -p /c/dozzle/certs </dev/null
   docker run --rm --network none -v "$config_root/dozzle/certs:/out" "$dozzle_image" --no-analytics generate-certs \
     --cert-out /out/dozzle_cert.pem --key-out /out/dozzle_key.pem </dev/null >/dev/null
+  # Dozzle starts only once both test agents answer (`dozzle healthcheck` in an agent dials the agent itself, as the
+  # live agents check theirs): an agent Dozzle dials before its container exists fails the name lookup, and Dozzle
+  # never dials it again.
   cat >>"$work/override-stack.yaml" <<YAML
   dozzle:
     environment:
       DOZZLE_REMOTE_AGENT: $dozzle_agents
+    depends_on:
+      dozzle-agent-test:
+        condition: service_healthy
+      dozzle-builtin-test:
+        condition: service_healthy
   dozzle-agent-test:
     image: $dozzle_image
     command: agent
@@ -136,12 +144,17 @@ YAML
       DOZZLE_KEY: /run/secrets/dozzle_key
     secrets: [dozzle_cert, dozzle_key]
     volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+    healthcheck: &dozzle_agent_healthcheck
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 2s
+      retries: 30
   dozzle-builtin-test:
     image: $dozzle_image
     command: agent
     environment:
       DOZZLE_HOST_ID: smoke-builtin-test
     volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+    healthcheck: *dozzle_agent_healthcheck
 YAML
 }
 
@@ -204,8 +217,8 @@ smoke_check() {
     fail "the worker doesn't see the API's Galaxy folder"
   echo "Steerhouse: the worker is ready and sees the API's Galaxy folder"
 
-  # Dozzle started with its pair, and reaches the test agent that has it but not the one with the built-in pair. It
-  # dials an agent again when its page is loaded, so a test agent that started after it shows up within seconds.
+  # Dozzle started with its pair, and reaches the test agent that has it but not the one with the built-in pair. Both
+  # were up before it started (smoke_prepare); it may take a few seconds after starting to connect.
   compose logs --no-color dozzle | grep "Loaded custom dozzle certificate and key" >/dev/null ||
     fail "Dozzle didn't load its certificate and key"
   for _ in $(seq 1 30); do
