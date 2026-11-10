@@ -85,6 +85,16 @@ itself ([dependencies.md](dependencies.md#tracking-dependencies)).
   the lock the agent skips its runs, so it never recreates a service they have stopped. A merge that lands during
   the nightly backup deploys a minute or two after the backup's copies are done. Where no agent runs, the lock is
   skipped.
+- **A check after each deploy** (optional, off until the agent's `CHECK` setting names it):
+  `scripts/post-deploy-check.sh` makes sure Dozzle sees every agent in `DOZZLE_REMOTE_AGENT`. Dozzle dials each
+  agent once, when it starts, and never dials one that didn't answer then (a running Dozzle does reconnect to an
+  agent that goes away and comes back), so a Dozzle started while an agent's host is down or deploying would show
+  that host as unavailable until restarted. The check waits up to `DOZZLE_CHECK_WAIT` seconds (90) for every host,
+  restarts Dozzle once if one is missing, and fails (the agent alerts and retries it later) only if the host is
+  still missing, because its agent really is down. It touches nothing but Dozzle. It reads Dozzle's page on
+  `DOZZLE_CHECK_URL` (default `http://127.0.0.1:4040/`). Where no agent runs, nothing calls it. A host that
+  reboots doesn't run it (the agent checks after deploys only): restart Dozzle by hand there if an agent's host was
+  down at the time.
 - **Changed systemd units aren't installed by the deploy.** The agent only runs `docker compose`; the scheduled
   backup's units in `deploy/systemd/` are copied into `~/.config/systemd/user/` once, by hand
   ([installing.md](installing.md#scheduled-backups)). When a merge changes them, copy them again and run

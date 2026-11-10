@@ -111,6 +111,11 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Added
 
+- `scripts/post-deploy-check.sh`, an optional check for the pull agent to run after each deploy (its `CHECK`
+  setting): Dozzle must see every agent in `DOZZLE_REMOTE_AGENT`. A Dozzle that started while an agent's host was
+  down never dials that agent again; the check restarts Dozzle once, and fails (and alerts) only if the host is still
+  missing ([upgrading.md](docs/upgrading.md#following-main)). Nothing runs it until the agent's settings name it.
+
 -- Steerhouse 0.10.1 (Ansible playbooks from a web UI): its API (`steerhouse`), workers (`steerhouse-worker`) and web
   UI (`steerhouse-frontend`, on `STEERHOUSE_PORT`, for the reverse proxy), from Steerhouse's own deploy files without
   its database and its `monitoring` profile. Its database is in PostgreSQL on a database server, reached with the URL
