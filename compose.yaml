@@ -150,7 +150,7 @@ services:
 
   dozzle:
     <<: *hardened
-    image: amir20/dozzle:v11.4.1@sha256:915a5acf91b01bb4d11de1fde7e30d55646211240269e4404c03a6f71c5fc91e
+    image: amir20/dozzle:pr-5626@sha256:99489d34c9f91c81d299feac5a66eac98ded3c51e910ea2b84d402d9671f9ad5
     container_name: dozzle
     restart: unless-stopped
     # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, its folder
