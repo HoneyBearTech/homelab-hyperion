@@ -148,9 +148,13 @@ services:
     volumes:
       - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/heimdall/config:/config
 
+  # Not a release: upstream's test build of its fix for agents that were down when Dozzle started
+  # (amir20/dozzle#5626, for amir20/dozzle#5624), which no release contains yet. Dependabot is held for Dozzle
+  # meanwhile (.github/dependabot.yml): the first release with the fix is pinned by hand, in a pull request that
+  # also lifts the hold (docs/dependencies.md#dozzle).
   dozzle:
     <<: *hardened
-    image: amir20/dozzle:v11.4.1@sha256:915a5acf91b01bb4d11de1fde7e30d55646211240269e4404c03a6f71c5fc91e
+    image: amir20/dozzle:pr-5626@sha256:99489d34c9f91c81d299feac5a66eac98ded3c51e910ea2b84d402d9671f9ad5
     container_name: dozzle
     restart: unless-stopped
     # Nothing it needs to keep is written to its root filesystem. Settings saved in its UI go to /data, its folder

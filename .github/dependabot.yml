@@ -13,6 +13,12 @@ updates:
     schedule:
       interval: "weekly"
     assignees: ["HoneyBearTech"]
+    ignore:
+      # Dozzle runs upstream's test build of its fix for agents that were down when it started (the pr-5626 tag),
+      # and Dependabot would follow that tag into other pull requests' test builds. Dozzle stays ignored until the
+      # first release that contains the fix: that release is pinned by hand, in a pull request that removes this
+      # entry (docs/dependencies.md#dozzle).
+      - dependency-name: "amir20/dozzle"
 
   # The check and test tools (requirements-dev.txt), pinned with hashes.
   - package-ecosystem: "pip"

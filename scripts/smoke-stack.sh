@@ -16,10 +16,19 @@ steerhouse_db=steerhouse-test-db
 steerhouse_pg=postgres:18.6-trixie@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
 
 # Dozzle: a throwaway certificate and key, made with `dozzle generate-certs` as on the host and owned by root as there,
-# and two test agents on the stack's network for Dozzle to connect to: dozzle-agent-test with that pair, which Dozzle
-# must show as available, and dozzle-builtin-test with the pair built into every Dozzle image, which it must not
-# reach. Each has a host id of its own: on the same Docker as Dozzle, it would otherwise be merged with this host.
-dozzle_agents="dozzle-agent-test:7007,dozzle-builtin-test:7007"
+# and three test agents on the stack's network for Dozzle to connect to: dozzle-agent-test with that pair, which Dozzle
+# must show as available, dozzle-builtin-test with the pair built into every Dozzle image, which it must not reach, and
+# dozzle-late-test with that pair, which Compose starts only once Dozzle is healthy, so Dozzle's dial as it starts
+# fails (amir20/dozzle#5624) and Dozzle must reach it later on its own. Each has a host id of its own: on the same
+# Docker as Dozzle, it would otherwise be merged with this host.
+dozzle_agents="dozzle-agent-test:7007,dozzle-builtin-test:7007,dozzle-late-test:7007"
+
+# The late agent runs a release the homelab's agents run, pinned like the PostgreSQL above (bumped by hand).
+dozzle_late_agent=amir20/dozzle:v11.4.1@sha256:915a5acf91b01bb4d11de1fde7e30d55646211240269e4404c03a6f71c5fc91e
+
+# How long the late agent's check waits, without asking Dozzle anything, before it reads Dozzle's page once: three of
+# the 30 s intervals at which upstream's fix (amir20/dozzle#5626) dials a failed agent again.
+dozzle_late_wait=90
 
 # Each host on Dozzle's page (its config__json), one "<endpoint> <available>" per line.
 dozzle_hosts() {
@@ -123,9 +132,9 @@ YAML
   docker run --rm --network none -v "$config_root:/c" "$busybox" mkdir -p /c/dozzle/certs </dev/null
   docker run --rm --network none -v "$config_root/dozzle/certs:/out" "$dozzle_image" --no-analytics generate-certs \
     --cert-out /out/dozzle_cert.pem --key-out /out/dozzle_key.pem </dev/null >/dev/null
-  # Dozzle starts only once both test agents answer (`dozzle healthcheck` in an agent dials the agent itself, as the
-  # live agents check theirs): an agent Dozzle dials before its container exists fails the name lookup, and Dozzle
-  # never dials it again.
+  # Dozzle starts only once the first two test agents answer (`dozzle healthcheck` in an agent dials the agent itself,
+  # as the live agents check theirs). The late agent starts only once Dozzle is healthy: Dozzle dials it before its
+  # container exists, and the name lookup fails, as for a host that is down when Dozzle starts.
   cat >>"$work/override-stack.yaml" <<YAML
   dozzle:
     environment:
@@ -154,6 +163,19 @@ YAML
     environment:
       DOZZLE_HOST_ID: smoke-builtin-test
     volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+    healthcheck: *dozzle_agent_healthcheck
+  dozzle-late-test:
+    image: $dozzle_late_agent
+    command: agent
+    environment:
+      DOZZLE_HOST_ID: smoke-late-test
+      DOZZLE_CERT: /run/secrets/dozzle_cert
+      DOZZLE_KEY: /run/secrets/dozzle_key
+    secrets: [dozzle_cert, dozzle_key]
+    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]
+    depends_on:
+      dozzle:
+        condition: service_healthy
     healthcheck: *dozzle_agent_healthcheck
 YAML
 }
@@ -217,10 +239,24 @@ smoke_check() {
     fail "the worker doesn't see the API's Galaxy folder"
   echo "Steerhouse: the worker is ready and sees the API's Galaxy folder"
 
-  # Dozzle started with its pair, and reaches the test agent that has it but not the one with the built-in pair. Both
-  # were up before it started (smoke_prepare); it may take a few seconds after starting to connect.
+  # Dozzle started with its pair, reaches the agent that started after it, and reaches the test agent that has the pair
+  # but not the one with the built-in pair.
   compose logs --no-color dozzle | grep "Loaded custom dozzle certificate and key" >/dev/null ||
     fail "Dozzle didn't load its certificate and key"
+  # The late agent first, before anything here reads Dozzle's page: its page (a plain GET /, never the events stream or
+  # an /api/ path) lists an agent that failed as unavailable without dialing it again, so only Dozzle itself can have
+  # reached the agent by the time of that one read. After the restore, Dozzle has either kept its connection, been
+  # restarted while the agent was up, or had the agent started after it again: in each case it must show the agent as
+  # available after the same wait.
+  echo "Dozzle: waiting ${dozzle_late_wait}s, without reading its page, for it to reach the agent that started after it"
+  sleep "$dozzle_late_wait"
+  hosts=$(dozzle_hosts)
+  [[ $hosts == *"dozzle-late-test:7007 True"* ]] ||
+    fail "Dozzle doesn't reach the agent that started after it: $hosts
+Dozzle's log about it:
+$(compose logs --no-color dozzle | grep dozzle-late-test || true)"
+  echo "Dozzle: reaches an agent that started after it"
+  # The other two were up before it started (smoke_prepare); it may take a few seconds after starting to connect.
   for _ in $(seq 1 30); do
     hosts=$(dozzle_hosts)
     if [[ $hosts == *"dozzle-agent-test:7007 True"* ]]; then break; fi
