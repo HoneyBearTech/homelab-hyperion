@@ -174,6 +174,15 @@ All notable changes to homelab-hyperion are documented here. The format follows
   deploys within about two minutes, Dependabot's automatic merges included. Rollback is a revert pull request; a
   server is held on a version by checking out that commit, which pauses the agent. Release tags stay as signed,
   verified snapshots ([docs/upgrading.md](docs/upgrading.md#following-main)).
+- Dependabot ignores Dozzle until the first Dozzle release that contains the fix for agents that were down when
+  Dozzle started (under Fixed, below). It would read the test build's `pr-5626` tag as a version and propose the
+  test builds of upstream's other pull requests, which the auto-merge would deploy. That release is pinned by hand, in a pull request that also removes the `ignore` entry;
+  until then no Dozzle update is proposed, security fixes included
+  ([docs/dependencies.md](docs/dependencies.md#dozzle)).
+- The smoke test checks that Dozzle reaches an agent that starts after it: a third test agent (Dozzle v11.4.1,
+  pinned in `scripts/smoke-stack.sh` and bumped by hand) starts only once Dozzle is healthy, and after 90 s in
+  which nothing asks Dozzle anything, Dozzle's page must show it as available, before and after the restore. The
+  smoke test takes about 3 minutes longer.
 - Dependabot's image rebuilds (the same tag moving to a new digest: a rebuild of the same app version, with newer
   base packages) now merge automatically once every required check passes, as on homelab-atlas. The rule merges only
   a pull request whose one changed file is `compose.yaml`, whose changed lines are all `image:` lines, and whose
@@ -191,6 +200,12 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Fixed
 
+- Dozzle now connects by itself to an agent that wasn't reachable when Dozzle started; before, that host stayed
+  unavailable until Dozzle was restarted. Dozzle runs upstream's test build of the fix
+  (`amir20/dozzle:pr-5626`, pinned by digest; it was `v11.4.1`), **which isn't a release yet**: the fix is merged
+  upstream but the latest release, v11.4.2, doesn't have it. The build contains v11.4.2, the 9 commits on
+  upstream's `main` after it, and the fix; no step to migrate Dozzle's saved settings was found. Deploying this
+  recreates Dozzle ([docs/dependencies.md](docs/dependencies.md#dozzle)).
 - CI's smoke test always logs out of Docker Hub after pulling the images, also when it pulled anonymously on a runner
   image that comes with a Docker Hub entry of its own.
 - `scripts/restore.sh` stops a service that bind-mounts a folder inside a mount it restores, and starts it again

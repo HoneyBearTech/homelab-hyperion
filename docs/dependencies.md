@@ -47,10 +47,13 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
 - **Dependabot** ([`.github/dependabot.yml`](../.github/dependabot.yml)) checks weekly for new image versions in the Compose file, new tool versions and new Action
   versions, and opens a pull request for each. Dependabot alerts and security updates are on.
 - The CI-only images in `run:` steps, the images in `.gitlab-ci.yml`, the scripts' busybox image, the smoke test's
-  stand-in PostgreSQL and the Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
+  stand-in PostgreSQL, the smoke test's late Dozzle agent (a Dozzle release pinned in
+  [`scripts/smoke-stack.sh`](../scripts/smoke-stack.sh)) and the Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
   Minecraft server whenever players' clients need a newer one, since Bedrock clients usually join only a server
   of their own version). Nor are new qBittorrent versions: Dependabot only proposes rebuilds of qBittorrent's
-  pinned tag ([below](#qbittorrent)), and a new version is bumped by hand when upstream releases one.
+  pinned tag ([below](#qbittorrent)), and a new version is bumped by hand when upstream releases one. Nor is
+  Dozzle while it runs upstream's test build: Dependabot ignores it until a release replaces that build
+  ([below](#dozzle)).
 - **Patch and minor updates merge automatically** once every required check has passed (CI with the Compose
   policy check and the smoke test, CodeQL, dependency review).
 - **Image rebuilds merge automatically too**: a pull request that only moves an image to a new digest under the
@@ -96,6 +99,37 @@ qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the ho
   ([installing.md](installing.md#downloads-on-a-network-share)). linuxserver.io's `libtorrentv1` builds (libtorrent
   1.2, which never maps files either and reads faster when seeding a lot, upstream says) are the fallback if
   seeding suffers, at the cost of BitTorrent v2 torrents.
+
+### Dozzle
+
+Since 2026-11-12 Dozzle runs **upstream's test build of a fix, not a release**:
+`amir20/dozzle:pr-5626@sha256:99489d34c9f91c81d299feac5a66eac98ded3c51e910ea2b84d402d9671f9ad5`, the image
+upstream's CI built from the branch of amir20/dozzle#5626. Dependabot ignores Dozzle meanwhile.
+
+- **Why.** Up to v11.4.2, Dozzle dials each agent in `DOZZLE_REMOTE_AGENT` once, as it starts, and never again
+  after that dial failed: a host that was down when Dozzle started stays unavailable until Dozzle is restarted
+  (amir20/dozzle#5624). The fix, which keeps dialing such an agent every 30 s, was merged upstream on 2026-11-11
+  and is in no release yet (the latest is v11.4.2, of 2026-11-08). The build was tried in CI on 2026-11-11: the
+  smoke test's check for an agent that starts after Dozzle failed on v11.4.1 and passed on this build, and the
+  smoke test has made that check on every change since.
+- **What the build contains.** v11.4.2, the 9 commits that were on upstream's `main` after it (notification
+  cooldowns and "send immediately", a login fix, dependency updates) and the fix. It comes from upstream's own CI
+  and the same registry repository as the releases. Its tag no longer moves, since the pull request is merged, and
+  it is pinned by digest like every image.
+- **Why Dependabot ignores Dozzle** (`ignore` in [`.github/dependabot.yml`](../.github/dependabot.yml)).
+  Dependabot reads `pr-5626` as version 5626 with the prefix `pr-`, and upstream publishes a `pr-<number>` image
+  for every pull request. Its weekly run would propose the highest-numbered one as a major update, and the
+  auto-merge would merge and deploy it: an unreviewed build of some other pull request, with the Docker socket.
+  While the hold lasts, Dependabot proposes no Dozzle update at all, security fixes included; the weekly image
+  scan still scans the pinned build and reports its findings.
+- **How the hold ends.** When upstream publishes the first release that contains the fix, a pull request by hand
+  pins it (`amir20/dozzle:<version>@sha256:<digest>`) and removes the `ignore` entry in the same pull request;
+  from then on Dependabot follows Dozzle's releases again. Nothing announces that release: check upstream's
+  releases. If upstream removes the test image from the registry before that, a server that no longer has the
+  image can't pull it, and the way out is the same pull request.
+- **The smoke test's late agent** (`dozzle-late-test`, the agent that starts after Dozzle) runs a Dozzle release,
+  v11.4.1, pinned by tag and digest in `scripts/smoke-stack.sh`. Dependabot doesn't read that file: bump it by
+  hand, to a release the agents on the other hosts run.
 
 ### Steerhouse
 
