@@ -156,6 +156,9 @@ reported to code scanning). Each finding is triaged within 14 days:
 
 ### Current findings
 
+The counts and image tags below describe the recorded historical scans and triage, not a scan of the current
+Compose pins. No new scan is represented by this documentation update.
+
 Triaged on 2026-10-22, from the scan of `main` at `043f623`: **352 open alerts, 18 critical and 334 high** (258 at
 the first triage on 2026-10-13, which bumped Dozzle, Heimdall and the Minecraft image; 94 are new since). Code
 scanning opens one alert per finding and file, so a component listed in several files counts several times: the

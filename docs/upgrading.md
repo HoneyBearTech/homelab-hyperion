@@ -18,7 +18,8 @@ automatically instead, where the merge is the upgrade ([Following `main`](#follo
 ## Backing up
 
 The state worth keeping is each service's data: Prowlarr's database (with the indexers and their credentials),
-qBittorrent's settings and torrent list, Heimdall's database, and the Minecraft server's worlds and settings.
+qBittorrent's settings and torrent list, Heimdall's database, the Minecraft server's worlds and settings,
+Dozzle's saved UI settings, and Steerhouse's API data (playbooks, run logs, Galaxy content and git checkouts).
 `scripts/backup.sh` stops each service in turn while it copies that service's mounts, so its database or world is
 consistent, starts it again (with any service Compose stopped along with it), then compresses the copy; services
 with nothing to archive keep running. It also copies `.env` and any `<service>.env` (such as `autoheal.env`):
@@ -34,8 +35,9 @@ then carries on. If it still runs then, the backup fails, but starts the service
 more, so Compose doesn't skip a container that is about to exit. A backup that leaves any service down that was
 running when it began fails and names it.
 
-It **never** archives the downloads directory: it is large, and the apps that import from it keep their own
-copies. A service can also leave paths inside a mount out of its archive with the
+It **never** archives either downloads or incomplete storage (`/downloads` and `/incomplete`): these are
+large and transient, and importing apps keep their own copies. A service can also leave paths inside a mount out
+of its archive with the
 `org.honeybeartech.hyperion.backup.exclude` label ([interfaces.md](interfaces.md#labels)); no service does yet.
 
 The directory holds one `<service>--<path>.tar.gz` per mount, the settings under `env/`, a `MANIFEST` naming
@@ -45,6 +47,11 @@ checkout's `git describe`) and `SHA256SUMS`. Everything in it is readable only b
 and it holds secrets (Prowlarr's indexer credentials among them). **Copy it off the host**: the nightly
 scheduled backup does that for you ([installing.md](installing.md#scheduled-backups)), encrypted with age when
 `BACKUP_AGE_RECIPIENT` is set, but take a fresh one before an upgrade all the same.
+
+Steerhouse's external PostgreSQL database needs a separate backup on its database server. Stack backups do not
+include Steerhouse's secret files or Dozzle's certificate and key: recover those manually from the password
+manager, especially `credential_encryption_key`, which is needed to decrypt stored credentials. The included
+`steerhouse.env` contains the worker and metrics tokens; keep a recovery copy with the secrets as well.
 
 ## Upgrading
 
