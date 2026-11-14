@@ -22,28 +22,29 @@ user in the `docker` group, and the host ports the services use free ([installin
    In `.env`, set `TZ`, `PUID`/`PGID` (a user that can write your downloads directories), `DOWNLOADS_PATH`,
    `INCOMPLETE_PATH` (qBittorrent's torrents still downloading), `CONFIG_ROOT` (the directory that holds each app's
    folder, `<app>/config`, with its settings and data), `MINECRAFT_LEVEL_NAME` (the world's name),
-   `MINECRAFT_ADDRESS` (this host's LAN address, for the players), the `STEERHOUSE_*` settings
+   `MINECRAFT_ADDRESS` (the address players can reach), `STEERHOUSE_PORT`, `STEERHOUSE_PUBLIC_URL`,
+   `STEERHOUSE_TRUSTED_PROXIES` and `STEERHOUSE_METRICS_PORT`
    ([installing.md](installing.md#steerhouse)), and `MINECRAFT_EULA=TRUE` once you've read and accepted the [Minecraft EULA](https://www.minecraft.net/eula). Never
    point a path into `/var/lib/docker/volumes` ([installing.md](installing.md#where-data-lives)). Every setting is
    described in [interfaces.md](interfaces.md#settings).
 
+   These settings are required; `DOZZLE_REMOTE_AGENT` is optional and may be empty for local logs only.
    Optionally, for a notice each time autoheal restarts a container, put a webhook URL in `autoheal.env`
    (`cp autoheal.env.example autoheal.env && chmod 600 autoheal.env`).
 
 3. **Create the apps' folders** as the `PUID`/`PGID` user, so Docker doesn't create them owned by root. Dozzle's
    is the exception: Dozzle runs as root, so Docker creates `CONFIG_ROOT/dozzle/config` for it on the first start.
 
-   ```sh
-   . ./.env && mkdir -p "$DOWNLOADS_PATH" "$INCOMPLETE_PATH"
-   for app in prowlarr qbittorrent heimdall minecraft steerhouse; do
-     mkdir -p "$CONFIG_ROOT/$app/config"
-   done
-   ```
+   Under the configured `CONFIG_ROOT`, create `prowlarr/config`, `qbittorrent/config`, `heimdall/config`,
+   `minecraft/config` and `steerhouse/config`. Also create the two download directories chosen in
+   `DOWNLOADS_PATH` and `INCOMPLETE_PATH`, writable by that user and group. Read these paths from your configuration;
+   do not source `.env` as shell code (the world name can contain spaces).
 
-   Then Steerhouse's database on your PostgreSQL server, its secrets and tokens, as
+   Then provision Steerhouse's database on your PostgreSQL server, its secrets and tokens, as
    [installing.md](installing.md#steerhouse) shows (`scripts/steerhouse.sh`), and the certificate and key Dozzle shares with its agents, in
-   `CONFIG_ROOT/dozzle/certs` and owned by root: Dozzle doesn't start without them
-   ([installing.md](installing.md#dozzles-certificate)).
+   `CONFIG_ROOT/dozzle/certs` and owned by root: Dozzle needs them even without remote agents
+   ([installing.md](installing.md#dozzles-certificate)). Configure Steerhouse's HTTPS reverse proxy before starting.
+   `WORKER_TOKEN` is mandatory; `METRICS_TOKEN` is optional, but the metrics port setting is still required.
 
 4. **Check and start.**
 
@@ -58,8 +59,8 @@ user in the `docker` group, and the host ports the services use free ([installin
    change it. In Prowlarr, set a login, add your indexers and connect the media apps. The Minecraft server's
    allowlist is on: until you name the players, nobody can join. Add each one with
    `docker compose exec minecraft send-command allowlist add "<gamer tag>"`. Players add the server by this host's
-   address and port 19132; it doesn't appear in their LAN list. For Steerhouse, let the role Argus' Grafana
-   uses read the `analytics` views (`scripts/steerhouse.sh grafana-role`), put it behind the reverse proxy and sign in as `admin`
+   address and port 19132; it doesn't appear in their LAN list. For Steerhouse, let the role the monitoring system's Grafana
+   uses read the `analytics` views (`scripts/steerhouse.sh grafana-role`) and sign in through the HTTPS reverse proxy as `admin`
    ([installing.md](installing.md#steerhouse)).
 
 To upgrade later, follow [upgrading.md](upgrading.md); it starts with a backup.

@@ -54,32 +54,43 @@ registry tag by itself: what runs is always a commit in `main`.
 
 ## Getting started
 
-On a Docker host ([requirements](docs/installing.md#requirements)):
+Follow the [quick start](docs/quick-start.md) on a prepared Docker host
+([requirements](docs/installing.md#requirements)). Before the first start, configure the required settings,
+create the app and download folders with the right ownership, provision Steerhouse's external PostgreSQL database
+and secret files/tokens, and configure its HTTPS reverse proxy ([Steerhouse setup](docs/installing.md#steerhouse)).
+Install Dozzle's root-owned certificate and key even if no remote agents are configured
+([certificate setup](docs/installing.md#dozzles-certificate)).
 
-```sh
-git clone https://github.com/HoneyBearTech/homelab-hyperion.git && cd homelab-hyperion
-cp .env.example .env && chmod 600 .env   # then set TZ, PUID/PGID, the paths, Minecraft's and Steerhouse's settings
-. ./.env && mkdir -p "$DOWNLOADS_PATH" "$INCOMPLETE_PATH"
-for app in prowlarr qbittorrent heimdall minecraft steerhouse; do
-  mkdir -p "$CONFIG_ROOT/$app/config"
-done
-# Steerhouse's database, secrets and tokens first: docs/installing.md#steerhouse
-docker compose up -d --wait
-```
+`.env` is Compose configuration data, not a shell script: do not source it.
 
-The full steps are in the [quick start](docs/quick-start.md).
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| [`compose.yaml`](compose.yaml) | Services, ports, mounts, health checks and hardening |
+| [`.env.example`](.env.example), [`autoheal.env.example`](autoheal.env.example), [`backup.env.example`](backup.env.example), [`steerhouse.env.example`](steerhouse.env.example) | Settings and secret-variable inventories; supply values locally |
+| [`scripts/`](scripts/) | Policy checking, backup, restore, setup helpers and isolated smoke checks |
+| [`deploy/systemd/`](deploy/systemd/) | Scheduled backup user service and timer |
+| [`tests/`](tests/) | Policy, backup stop handling, deploy locking and settings-parsing tests |
+| [`docs/`](docs/) | Setup, architecture, interfaces, operations and security documentation |
+| [`Makefile`](Makefile) | Development checks and smoke-test entry points |
+| [`requirements-dev.in`](requirements-dev.in), [`requirements-dev.txt`](requirements-dev.txt) | Development tool inventory and pinned, hashed requirements |
 
 ## Usage
 
 ```sh
 docker compose ps                 # what's running
 docker compose logs -f <service>  # one service's log (or use Dozzle)
-make check                        # policy check: every image pinned, nothing privileged
-scripts/backup.sh                 # back up every service's data (stops each briefly), never the downloads
+make check                        # policy check; needs Docker/Compose, configured settings and development tools
+scripts/backup.sh                 # back up every service's data (stops each briefly), never downloads or incomplete storage
 ```
 
-Upgrading to a new release, or following `main` the way the maintainer's server does:
-[docs/upgrading.md](docs/upgrading.md).
+Use `docker compose ps` and service logs to inspect health after changes. Configure
+[scheduled backups](docs/installing.md#scheduled-backups) with the supplied user service and timer, keep copies
+off the host, and take a fresh backup before an [upgrade](docs/upgrading.md). For recovery, follow the
+[restore and rollback steps](docs/upgrading.md#rolling-back) or [rebuild guide](docs/rebuilding.md).
+`make check` creates a local development venv from the pinned requirements and also needs Docker Engine,
+Compose and configured settings; see [commands](docs/interfaces.md#commands).
 
 ## Configuration
 
@@ -89,21 +100,26 @@ without it, restarts are only logged. Steerhouse's tokens go in the gitignored `
 [`steerhouse.env.example`](steerhouse.env.example)) and its other secrets in files under
 `CONFIG_ROOT/steerhouse/secrets`, which `scripts/steerhouse.sh` writes ([installing](docs/installing.md#steerhouse)).
 
-| Setting | Default in `.env.example` | Meaning |
+| Setting | Required | Meaning |
 | --- | --- | --- |
-| `TZ` | `Etc/UTC` | Time zone |
-| `PUID`, `PGID` | `1000` | User and group Prowlarr, qBittorrent, Heimdall, the Minecraft server and Steerhouse's API run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads and incomplete directories |
-| `CONFIG_ROOT` | `/srv/config` | Each app's folder, `<app>/config`: its settings and database (Minecraft's worlds), and Steerhouse's secrets (`steerhouse/secrets`, never backed up). Holds every login: back it up. Never a path inside `/var/lib/docker/volumes` ([why](docs/installing.md#where-data-lives)) |
-| `DOWNLOADS_PATH` | `/srv/downloads` | Where qBittorrent saves downloads (never backed up by this stack) |
-| `INCOMPLETE_PATH` | `/srv/incomplete` | Where qBittorrent keeps torrents still downloading, at `/incomplete` (never backed up) |
-| `DOZZLE_REMOTE_AGENT` | *(empty)* | Dozzle agents on other hosts (`host:port`, comma-separated) whose logs Dozzle also shows |
-| `MINECRAFT_LEVEL_NAME` | `Bedrock level` | The world the server opens: its folder under `worlds/` |
-| `MINECRAFT_ADDRESS` | `192.0.2.10` | The address players reach this host at, handed to them with their gameplay port |
-| `MINECRAFT_EULA` | *(empty)* | Set to `TRUE` to accept the [Minecraft EULA](https://www.minecraft.net/eula); the server won't start otherwise |
-| `STEERHOUSE_PORT` | `8085` | Host port of Steerhouse's web UI, behind the reverse proxy's HTTPS |
-| `STEERHOUSE_PUBLIC_URL` | `https://steerhouse.example.com` | The address people open Steerhouse at |
-| `STEERHOUSE_TRUSTED_PROXIES` | `192.0.2.20` | The reverse proxy's address, the only one whose `X-Forwarded-For` Steerhouse believes |
-| `STEERHOUSE_METRICS_PORT` | `8002` | Host port of Steerhouse's metrics (token-protected), for Argus |
+| `TZ` | yes | Time zone |
+| `PUID`, `PGID` | yes | User and group Prowlarr, qBittorrent, Heimdall, the Minecraft server and Steerhouse's API run as; must own those apps' folders under `CONFIG_ROOT` and be able to write the downloads and incomplete directories |
+| `CONFIG_ROOT` | yes | Each app's folder, `<app>/config`: its settings and database (Minecraft's worlds), and Steerhouse's secrets (`steerhouse/secrets`, never backed up). Holds every login: back it up. Never a path inside `/var/lib/docker/volumes` ([why](docs/installing.md#where-data-lives)) |
+| `DOWNLOADS_PATH` | yes | Where qBittorrent saves downloads (never backed up by this stack) |
+| `INCOMPLETE_PATH` | yes | Where qBittorrent keeps torrents still downloading, at `/incomplete` (never backed up) |
+| `DOZZLE_REMOTE_AGENT` | no | Dozzle agents on other hosts (`host:port`, comma-separated) whose logs Dozzle also shows |
+| `MINECRAFT_LEVEL_NAME` | yes | The world the server opens: its folder under `worlds/` |
+| `MINECRAFT_ADDRESS` | yes | The address players reach this host at, handed to them with their gameplay port |
+| `MINECRAFT_EULA` | yes | Set to `TRUE` to accept the [Minecraft EULA](https://www.minecraft.net/eula); the server won't start otherwise |
+| `STEERHOUSE_PORT` | yes | Host port of Steerhouse's web UI, behind the reverse proxy's HTTPS |
+| `STEERHOUSE_PUBLIC_URL` | yes | The address people open Steerhouse at |
+| `STEERHOUSE_TRUSTED_PROXIES` | yes | The reverse proxy's address, the only one whose `X-Forwarded-For` Steerhouse believes |
+| `STEERHOUSE_METRICS_PORT` | yes | Host port of Steerhouse's metrics (token-protected), for the monitoring system |
+
+Optional backup configuration is in [`backup.env.example`](backup.env.example): `BACKUP_DIR`, `BACKUP_KEEP`,
+`BACKUP_REMOTE`, `BACKUP_REMOTE_KEEP`, `BACKUP_PING_URL` and `BACKUP_AGE_RECIPIENT`. autoheal's optional
+`WEBHOOK_URL` and Steerhouse's required `WORKER_TOKEN` and optional `METRICS_TOKEN` are described in the
+[settings reference](docs/interfaces.md#settings), along with the four secret-file names and recovery requirements.
 
 Ports, volumes and labels: [docs/interfaces.md](docs/interfaces.md).
 

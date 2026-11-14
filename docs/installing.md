@@ -22,10 +22,9 @@ The [quick start](quick-start.md) is the short version of this page.
 
 ## Where data lives
 
-Every app keeps its settings and data in its own folder under one directory you choose, `CONFIG_ROOT` (for
-example `/srv/config`, or a folder in your home directory): `CONFIG_ROOT/<app>/config`, where `<app>` is the
-service's name. Anything else an app keeps on the host goes beside it, as `CONFIG_ROOT/<app>/<purpose>` (none does
-yet).
+Every app keeps its settings and data in its own folder under one directory you choose, `CONFIG_ROOT`:
+`CONFIG_ROOT/<app>/config`, where `<app>` is the service's name. Other host files go beside it as
+`CONFIG_ROOT/<app>/<purpose>`: Steerhouse uses `steerhouse/secrets`, and Dozzle uses `dozzle/certs`.
 
 | What | Where on the host | In the container |
 | --- | --- | --- |
@@ -68,11 +67,14 @@ restart qBittorrent (`docker compose restart qbittorrent`). The setting is kept 
 
 1. Clone the repository (or download a release's source archive and verify it,
    [verifying-releases.md](verifying-releases.md)).
-2. Create `.env` from `.env.example` (mode `600`) and set every value, including `MINECRAFT_EULA=TRUE`.
+2. Create `.env` from `.env.example` (mode `600`) and set the required settings, including acceptance of the
+   Minecraft EULA.
+   Optional settings may remain empty; see [interfaces.md](interfaces.md#settings).
    Optionally create `autoheal.env` from `autoheal.env.example` (mode `600`) for restart notices.
 3. Create the apps' folders as the `PUID`:`PGID` user (all but Dozzle's,
    [quick start](quick-start.md)), Steerhouse's database, secrets and tokens
-   ([below](#steerhouse)) and Dozzle's certificate and key ([below](#dozzles-certificate)), then
+   ([below](#steerhouse)), configure the HTTPS reverse proxy, and install Dozzle's certificate and key
+   even without remote agents ([below](#dozzles-certificate)), then
    `docker compose up -d --wait`.
 
 **Adopting existing containers.** If the services already run on the host (from Portainer stacks or another
@@ -96,14 +98,15 @@ keys, vault passwords and tokens of the machines it manages (encrypted with `cre
 it as the most sensitive service here. It is three pieces from Steerhouse's own `deploy/compose.yaml`: the API
 (`steerhouse`), the workers that run the playbooks (`steerhouse-worker`) and the web UI (`steerhouse-frontend`). Its
 database is in PostgreSQL on a database server, not in this stack: the API reaches it with one URL, login and
-password included, which it reads from a secret file. Its monitoring is Argus' job (on another host): the API's
+password included, which it reads from a secret file. An external monitoring system handles its monitoring: the API's
 Prometheus metrics are published for it, and its Grafana reads the database's read-only `analytics` views on the
 database server.
 
 Before the first start:
 
 1. **On the database server**, as its administrator in `psql`, make a login that owns one new database, and the
-   read-only role Argus' Grafana logs in as, each with a long random password (for example `openssl rand -hex 24`).
+   read-only role the monitoring system's Grafana logs in as, each with a long random password
+   (for example `openssl rand -hex 24`).
    Steerhouse's login needs no other rights: it can't make roles, which is why `grafana_ro` is made here, with the
    settings Steerhouse documents for it:
 
@@ -117,13 +120,13 @@ Before the first start:
    GRANT CONNECT ON DATABASE steerhouse TO grafana_ro;
    ```
 
-   Let `steerhouse` connect from this host and `grafana_ro` from Argus' host (`pg_hba.conf`, `hostssl` with
+   Let `steerhouse` connect from this host and `grafana_ro` from the monitoring host (`pg_hba.conf`, `hostssl` with
    `scram-sha-256`).
 2. **Folders and secrets**, on this host as the `PUID`:`PGID` user, in the checkout. `scripts/steerhouse.sh` never
-   replaces a file that exists.
+   replaces a file that exists. First set the shell variable `CONFIG_ROOT` to the configuration directory you
+   chose in `.env`; do not source `.env` or try to parse it as shell code.
 
    ```sh
-   CONFIG_ROOT=$(sed -n 's/^CONFIG_ROOT=//p' .env)
    mkdir -p "$CONFIG_ROOT/steerhouse/config"
    scripts/steerhouse.sh secrets "$CONFIG_ROOT/steerhouse/secrets"
    scripts/steerhouse.sh env steerhouse.env
@@ -148,8 +151,16 @@ Before the first start:
    server's certificate, which needs its CA certificate inside the container.
 4. **Settings** in `.env`: `STEERHOUSE_PORT`, `STEERHOUSE_PUBLIC_URL`, `STEERHOUSE_TRUSTED_PROXIES` (the reverse
    proxy's address) and `STEERHOUSE_METRICS_PORT`.
-5. **Start it** (`docker compose up -d --wait`). The API makes and migrates its tables on its first start.
-6. **The analytics views for Argus' Grafana**, once the stack is up:
+5. **HTTPS in front.** On the reverse proxy (Nginx Proxy Manager), a proxy host for the name in
+   `STEERHOUSE_PUBLIC_URL`, forwarding to `http://<this host>:<STEERHOUSE_PORT>`, with **Websockets Support** on
+   (live run output uses them), an SSL certificate, Force SSL and HSTS, and, under Advanced,
+   `proxy_read_timeout 1h;` (long runs keep their output stream open). It passes the `Host` header and the
+   client's address in `X-Forwarded-For`, which Steerhouse believes from `STEERHOUSE_TRUSTED_PROXIES` only. Don't
+   strip the security headers the web UI sends.
+
+   Install [Dozzle's certificate and key](#dozzles-certificate) before starting the stack too.
+6. **Start it** (`docker compose up -d --wait`). The API makes and migrates its tables on its first start.
+7. **The analytics views for the monitoring system's Grafana**, once the stack is up:
 
    ```sh
    scripts/steerhouse.sh grafana-role
@@ -158,16 +169,10 @@ Before the first start:
    It runs Steerhouse's own commands in the API's container, over the API's connection: `analytics-grant` lets
    `grafana_ro` read the `analytics` views, and `analytics-check` checks that it can read nothing else. Run it again
    after an upgrade of Steerhouse.
-7. **HTTPS in front.** On the reverse proxy (Nginx Proxy Manager), a proxy host for the name in
-   `STEERHOUSE_PUBLIC_URL`, forwarding to `http://<this host>:<STEERHOUSE_PORT>`, with **Websockets Support** on
-   (live run output uses them), an SSL certificate, Force SSL and HSTS, and, under Advanced,
-   `proxy_read_timeout 1h;` (long runs keep their output stream open). It passes the `Host` header and the
-   client's address in `X-Forwarded-For`, which Steerhouse believes from `STEERHOUSE_TRUSTED_PROXIES` only. Don't
-   strip the security headers the web UI sends.
 8. **Sign in** at `STEERHOUSE_PUBLIC_URL` as `admin`, change the password and set up two-factor login: admins must
    (`REQUIRE_ADMIN_2FA` is on). Then follow Steerhouse's quick start from its step 2.
 
-**What Argus needs**, over the LAN:
+**What the monitoring system needs**, over the LAN:
 
 | For | Address | Credentials |
 | --- | --- | --- |
@@ -211,10 +216,10 @@ docker run --rm --network none -v "$PWD/dozzle-pair:/out" amir20/dozzle:<tag>@sh
 Save both files in a password manager, with Steerhouse's secrets: they are never in the stack's backups
 (`scripts/backup.sh` copies read-write mounts only), so that is where a rebuilt host gets them back from. Then copy
 them to this host and to every agent's (for example with `scp` into your home directory) and, in each checkout, put
-them in place:
+them in place. First set the shell variable `CONFIG_ROOT` to the configuration directory chosen in `.env`;
+do not source `.env`. These files are required even when `DOZZLE_REMOTE_AGENT` is empty.
 
 ```sh
-. ./.env
 sudo install -d -o root -g root -m 755 "$CONFIG_ROOT/dozzle/certs"
 sudo install -o root -g root -m 644 ~/dozzle_cert.pem "$CONFIG_ROOT/dozzle/certs/dozzle_cert.pem"
 sudo install -o root -g root -m 600 ~/dozzle_key.pem "$CONFIG_ROOT/dozzle/certs/dozzle_key.pem"
