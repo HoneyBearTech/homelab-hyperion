@@ -44,7 +44,7 @@ come from their own projects; this stack doesn't include or manage them.
 | Minecraft players | Connect to the Bedrock server: a NetherNet handshake on TCP 19132, then gameplay on a UDP port from 19140–19149 |
 | autoheal | Watches health through the socket proxy and restarts unhealthy containers |
 | Steerhouse users | Run playbooks and manage inventories, credentials and schedules in Steerhouse's web UI, through the reverse proxy (HTTPS) |
-| Argus (another host) | Its Prometheus scrapes Steerhouse's metrics (with a token); its Grafana reads Steerhouse's `analytics` views as `grafana_ro` on the database server |
+| External monitoring system | Its Prometheus scrapes Steerhouse's metrics (with a token); its Grafana reads Steerhouse's `analytics` views as `grafana_ro` on the database server |
 
 ## Data flow
 
@@ -56,7 +56,7 @@ Prowlarr ──API (pushes indexers)──▶ Sonarr / Radarr / Lidarr
 Sonarr / Radarr / Lidarr ──API──▶ qBittorrent ──BitTorrent──▶ peers, trackers, DHT
 qBittorrent ──writes──▶ downloads directory ◀──imports── Sonarr / Radarr / Lidarr
 
-Minecraft players ──UDP──▶ Minecraft Bedrock server ──HTTPS on start──▶ Minecraft's download site
+Minecraft players ──TCP handshake + UDP gameplay──▶ Minecraft Bedrock server ──HTTPS on start──▶ Minecraft's download site
 
 Dozzle ──Docker socket (read-only mount)──▶ Docker API
 Dozzle ──agent protocol──▶ Dozzle agents on other hosts (optional)
@@ -64,13 +64,12 @@ autoheal ──filtered API──▶ socket proxy ──▶ Docker socket
 
 LAN clients ──HTTPS via reverse proxy──▶ Steerhouse web UI ──▶ Steerhouse API ──TLS──▶ database server
 Steerhouse workers ──internal API──▶ Steerhouse API;  workers (playbooks) ──SSH──▶ the machines they manage
-Argus' Prometheus ──HTTP + token──▶ Steerhouse metrics;  Argus' Grafana ──grafana_ro──▶ database server
+Monitoring Prometheus ──HTTP + token──▶ Steerhouse metrics;  monitoring Grafana ──grafana_ro──▶ database server
 ```
 
 Each service keeps its settings and database in its own folder on the host, `CONFIG_ROOT/<app>/config` (see
 [interfaces.md](interfaces.md#volumes-and-mounts)), which is what `scripts/backup.sh` archives; no app data is in a
-Docker volume. The downloads
-directory is never archived.
+Docker volume. Neither downloads nor incomplete storage is archived.
 
 ## How changes reach the host
 
@@ -99,11 +98,15 @@ only pulls; nothing connects in to it to deploy.
 | `.env.example` | Template for the settings |
 | `autoheal.env.example` | Template for autoheal's optional restart webhook (a secret) |
 | `backup.env.example` | Template for the scheduled backup's settings |
+| `steerhouse.env.example` | Required worker token and optional metrics token inventory |
+| `scripts/steerhouse.sh` | Creates local secrets and tokens, and grants/checks the analytics role |
 | `scripts/check_compose.py` | The policy check and SBOM generator (standard-library Python) |
-| `scripts/backup.sh`, `scripts/restore.sh` | Backup and restore of every service's data, never the downloads |
+| `scripts/backup.sh`, `scripts/restore.sh` | Backup and restore of service data, excluding downloads and incomplete storage |
 | `scripts/scheduled-backup.sh`, `deploy/systemd/` | Nightly backup, copied off the host with rsync and pruned, reported to an Uptime Kuma push monitor |
-| `scripts/smoke-test.sh` | Starts the stack in isolation, waits for health, and round-trips a backup |
-| `tests/` | The checker's tests, with JSON fixtures |
+| `scripts/smoke-test.sh`, `scripts/smoke-stack.sh` | Isolated health, backup and restore checks, with stack-specific database, worker, metrics and Dozzle-agent checks |
+| `tests/` | Policy checker and JSON fixtures, backup stop handling, deploy locks and settings parsing |
+| `Makefile` | Local check, test, lint, configuration and smoke-test commands |
+| `requirements-dev.in`, `requirements-dev.txt` | Development tool inventory and pinned, hashed requirements |
 | `docs/` | This documentation |
 | `.github/` | CI, release and security workflows, Dependabot, templates |
 | `.gitlab-ci.yml` | The pipeline of the copy on the maintainer's GitLab: mirrors GitHub, re-runs the daemon-free checks |
