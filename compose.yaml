@@ -116,7 +116,7 @@ services:
   # --- Start page and logs --------------------------------------------------------------------------------------
   heimdall:
     <<: *hardened
-    image: lscr.io/linuxserver/heimdall:version-v2.8.4@sha256:6abf244e7bfef9c9383d1a9292d602a65f71e5abfe741d65b14622a927da733c
+    image: lscr.io/linuxserver/heimdall:version-v2.8.4@sha256:8ae83fb0b097e2281e1cfb304ca3efe9be574ddc31933c93a72dd49174b73b91
     container_name: heimdall
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
     # user (SETUID, SETGID) and stops it cleanly on shutdown (KILL: without it the app is killed after the timeout).
