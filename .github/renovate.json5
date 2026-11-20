@@ -48,6 +48,11 @@
   minimumReleaseAge: "3 days",
   minimumReleaseAgeBehaviour: "timestamp-optional",
 
+  // Pull requests that fix a vulnerability alert carry the security and openssf labels.
+  vulnerabilityAlerts: {
+    labels: ["security", "openssf"],
+  },
+
   // requirements-dev.in lists the check and test tools, requirements-dev.txt pins them with hashes. The pip-compile
   // manager reads the command in the header of requirements-dev.txt and re-runs it for each update. The
   // pip_requirements manager is off, so the same pins aren't also bumped in place.
