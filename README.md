@@ -47,7 +47,7 @@ Docker Compose stack for Hyperion, a homelab Ubuntu server (24.04, amd64). Versi
 - **autoheal**, behind a **socket proxy**: restarts any container whose health check fails
 
 Every service has a health check, and every image is pinned by tag **and** digest, for `linux/amd64`. The
-Minecraft server's own version is pinned in `compose.yaml` too, never `LATEST`. New versions arrive as Dependabot
+Minecraft server's own version is pinned in `compose.yaml` too, never `LATEST`. New versions arrive as Renovate
 pull requests that CI checks before they're merged. The maintainer's server follows `main`: a pull agent there
 applies each merge within a couple of minutes ([upgrading](docs/upgrading.md#following-main)). Nothing updates from a
 registry tag by itself: what runs is always a commit in `main`.

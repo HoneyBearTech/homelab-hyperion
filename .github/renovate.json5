@@ -1,0 +1,172 @@
+// Renovate configuration. Renovate proposes every dependency update (it replaced Dependabot's version updates) and
+// merges them once every required check has passed; docs/dependencies.md describes what it reads and when.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  enabled: true,
+
+  extends: [
+    "config:recommended",
+    // Keep every image as name:tag@sha256:<digest> and every Action as a full commit SHA with its version in a
+    // comment, and propose a new digest when a tag is rebuilt.
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommitsDisabled",
+  ],
+
+  // Only the files listed in docs/dependencies.md.
+  enabledManagers: ["docker-compose", "pip-compile", "github-actions", "gitlabci", "pre-commit", "custom.regex"],
+
+  // Renovate's pre-commit manager is off by default; this turns it on for .pre-commit-config.yaml (the hook revs and
+  // the `additional_dependencies` of python hooks). Hyperion's config has no image pin, so the regex manager below
+  // doesn't read it.
+  "pre-commit": {
+    enabled: true,
+  },
+
+  // Mondays from 06:00 UTC.
+  timezone: "Etc/UTC",
+  schedule: ["* 6-9 * * 1"],
+  assignees: ["HoneyBearTech"],
+
+  // The main ruleset requires signed commits and a DCO sign-off on each one: commits made through GitHub's API are
+  // signed by GitHub, and the sign-off line is the one workflows/dco.yml looks for.
+  platformCommit: "enabled",
+  commitBody: "Signed-off-by: {{{gitAuthor}}}",
+
+  // Patch, minor and major updates and image rebuilds (a new digest under the same tag) are squash-merged by GitHub
+  // once every required check has passed (docs/dependencies.md). A merge deploys: the server's pull agent applies
+  // main within minutes, so a major, which can migrate an app's data one way, arrives unattended with the nightly
+  // backup behind it.
+  automerge: true,
+  automergeType: "pr",
+  automergeStrategy: "squash",
+  platformAutomerge: true,
+
+  // A new version (patch, minor or major) waits three days after its release before it is proposed, then merges as
+  // above. Fixes for vulnerability alerts and image rebuilds skip the wait (see the `digest` rule below). A version
+  // update from a registry that reports no release date is let through without the wait.
+  minimumReleaseAge: "3 days",
+  minimumReleaseAgeBehaviour: "timestamp-optional",
+
+  // requirements-dev.in lists the check and test tools, requirements-dev.txt pins them with hashes. The pip-compile
+  // manager reads the command in the header of requirements-dev.txt and re-runs it for each update. The
+  // pip_requirements manager is off, so the same pins aren't also bumped in place.
+  "pip-compile": {
+    managerFilePatterns: ["/^requirements-dev\\.txt$/"],
+    // Renovate's pip-compile manager turns on a periodic "lock file maintenance" by default, which re-resolves every
+    // tool to its newest version at once, with no release dates, so it would skip the 3-day wait and then merge by
+    // itself. Off: the tools move one at a time through ordinary updates, which do wait.
+    lockFileMaintenance: {
+      enabled: false,
+    },
+  },
+
+  customManagers: [
+    {
+      // Images that no other manager reads, bumped by hand until now: the ones `docker run` starts in workflow
+      // steps (actionlint, gitleaks, Trivy), and the images pinned in scripts/ (busybox in lib.sh, the smoke test's
+      // stand-in PostgreSQL and late Dozzle agent in smoke-stack.sh; the Dozzle one is held, see below).
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/[^/]+\\.ya?ml$/", "/^scripts/[^/]+\\.sh$/"],
+      matchStrings: [
+        "(?<depName>[a-z0-9][a-z0-9./-]*[a-z0-9]):(?<currentValue>[A-Za-z0-9][A-Za-z0-9._-]*)@(?<currentDigest>sha256:[0-9a-f]{64})",
+      ],
+      datasourceTemplate: "docker",
+    },
+  ],
+
+  packageRules: [
+    {
+      // An image rebuild (a new digest under the same tag) doesn't wait: Docker Hub dates it by the tag's last push,
+      // so a tag rebuilt about weekly would restart the clock each time and never get through the Monday-only
+      // schedule. Only images: a moved tag on a pre-commit hook or an Action keeps the 3-day wait.
+      matchDatasources: ["docker"],
+      matchUpdateTypes: ["digest"],
+      minimumReleaseAge: null,
+    },
+    {
+      // Pin each hook repo by commit SHA with its version in a comment (`rev: <sha> # frozen: v1.2.3`), like the
+      // Actions, and propose a new SHA when the tag moves.
+      matchManagers: ["pre-commit"],
+      pinDigests: true,
+    },
+    {
+      // A tool is pinned twice (requirements-dev.txt for CI and `make`, .pre-commit-config.yaml for the hooks).
+      matchPackageNames: ["ruff", "astral-sh/ruff-pre-commit"],
+      groupName: "ruff",
+    },
+    {
+      matchPackageNames: ["yamllint", "adrienverge/yamllint"],
+      groupName: "yamllint",
+    },
+    {
+      matchPackageNames: ["shellcheck-py", "shellcheck-py/shellcheck-py"],
+      groupName: "shellcheck-py",
+    },
+    {
+      // init, analyze and upload-sarif must share one version (was Dependabot's `codeql` group).
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["github/codeql-action", "github/codeql-action/**"],
+      groupName: "codeql",
+    },
+    {
+      // The smoke test's `runs-on: ubuntu-24.04` (ci.yml) matches the server's Ubuntu release, so it moves with the
+      // server, by hand, not when GitHub offers a newer label.
+      matchDatasources: ["github-runners"],
+      enabled: false,
+    },
+    {
+      // Dozzle runs upstream's test build of its fix for agents that were down when it started (the pr-5626 tag),
+      // and upstream publishes a pr-<number> image for every pull request, which Renovate would follow to the
+      // highest one. Updates stay off, as they were under Dependabot, until the first release that contains the fix
+      // (compose.yaml, and the late agent in scripts/smoke-stack.sh): that release is pinned by hand, in the pull
+      // request that removes this rule (docs/dependencies.md#dozzle).
+      matchPackageNames: ["amir20/dozzle"],
+      enabled: false,
+    },
+    {
+      // linuxserver.io images are pinned by their `version-<app version>` tag (version-2.7.0.5723, version-v2.8.4),
+      // which always points at the newest build of that app version: a new app version is a new tag, a rebuild is a
+      // new digest. The `-lsNNN` build tags are never proposed.
+      matchDatasources: ["docker"],
+      matchPackageNames: ["lscr.io/linuxserver/**"],
+      matchCurrentValue: "/^version-/",
+      versioning: "regex:^version-v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?$",
+    },
+    {
+      // qBittorrent's tag names the libtorrent it is built on too (version-5.3.0_v2.1.2), so the regex below reads
+      // the libtorrent as the `compatibility` group: only rebuilds of the pinned tag (a new digest) are proposed and
+      // merged, as before (docs/dependencies.md#qbittorrent). The next rule turns the version updates off.
+      matchDatasources: ["docker"],
+      matchPackageNames: ["lscr.io/linuxserver/qbittorrent"],
+      matchCurrentValue: "/^version-/",
+      versioning: "regex:^version-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)_(?<compatibility>v\\d+\\.\\d+\\.\\d+)$",
+    },
+    {
+      // A new qBittorrent version is bumped by hand, as under Dependabot. This is a separate rule because Renovate
+      // doesn't allow `versioning` and `matchUpdateTypes` in the same one; the digest rebuilds above still go through.
+      matchDatasources: ["docker"],
+      matchPackageNames: ["lscr.io/linuxserver/qbittorrent"],
+      matchUpdateTypes: ["major", "minor", "patch"],
+      enabled: false,
+    },
+    {
+      // The repo's Python is 3.14 (pyproject.toml's target-version, the setup-python steps, the GitLab job image):
+      // a new patch release is fine, a new minor moves by hand together with those.
+      matchPackageNames: ["python", "actions/python-versions"],
+      matchUpdateTypes: ["major", "minor"],
+      enabled: false,
+    },
+    {
+      // Only the idle workflows/dependabot-auto-merge.yml uses this action, and with Dependabot gone nothing triggers
+      // that workflow; its pin stays as it is until the workflow is deleted.
+      matchPackageNames: ["dependabot/fetch-metadata"],
+      enabled: false,
+    },
+    {
+      // Steerhouse's backend (API and workers) and frontend release together.
+      matchPackageNames: ["honeybeartech/steerhouse-*"],
+      groupName: "steerhouse",
+    },
+  ],
+}

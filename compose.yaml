@@ -2,7 +2,7 @@
 # secrets a service can only read from its environment from <service>.env (templates: autoheal.env.example,
 # steerhouse.env.example), Steerhouse's other secrets from files under CONFIG_ROOT/steerhouse/secrets and Dozzle's
 # certificate and key from files under CONFIG_ROOT/dozzle/certs (Docker secrets, at the end).
-# Every image is pinned as name:tag@sha256:<digest>; Dependabot proposes updates (patch, minor and major ones merge
+# Every image is pinned as name:tag@sha256:<digest>; Renovate proposes updates (patch, minor and major ones merge
 # automatically once CI passes). scripts/check_compose.py enforces the policy (docs/security.md#policy).
 # Each app's settings and data live in its own host folder, CONFIG_ROOT/<app>/config, and nowhere else: no named
 # volumes, and no path into /var/lib/docker/volumes, which a volume prune deletes (docs/installing.md#where-data-lives).
@@ -64,7 +64,8 @@ services:
     <<: *hardened
     # linuxserver.io's version tag names qBittorrent and the libtorrent it is built on: 2.1, whose disk I/O reads and
     # writes files instead of mapping them into memory, which suits a network share (docs/dependencies.md#qbittorrent).
-    # Dependabot follows this tag's rebuilds but can't read it as a version: a new qBittorrent is bumped by hand.
+    # Renovate follows this tag's rebuilds but proposes no new version (.github/renovate.json5): a new qBittorrent is
+    # bumped by hand.
     image: lscr.io/linuxserver/qbittorrent:version-5.3.0_v2.1.2@sha256:05c1454f9a32967affc1f34f67f8cc0cc57dd805dca45489fe797095a6286556
     container_name: qbittorrent
     # Its init (s6-overlay) runs as root: it takes ownership of the data for PUID:PGID (CHOWN), runs the app as that
@@ -149,8 +150,8 @@ services:
       - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/heimdall/config:/config
 
   # Not a release: upstream's test build of its fix for agents that were down when Dozzle started
-  # (amir20/dozzle#5626, for amir20/dozzle#5624), which no release contains yet. Dependabot is held for Dozzle
-  # meanwhile (.github/dependabot.yml): the first release with the fix is pinned by hand, in a pull request that
+  # (amir20/dozzle#5626, for amir20/dozzle#5624), which no release contains yet. Renovate is held for Dozzle
+  # meanwhile (.github/renovate.json5): the first release with the fix is pinned by hand, in a pull request that
   # also lifts the hold (docs/dependencies.md#dozzle).
   dozzle:
     <<: *hardened
@@ -189,7 +190,7 @@ services:
   # --- Games ----------------------------------------------------------------------------------------------------
   # The image downloads the Bedrock Dedicated Server named by VERSION from Minecraft's site on start and runs it
   # as UID:GID. VERSION is pinned here, never LATEST: a newer server upgrades the world for good, so a new version
-  # is a reviewed change (Dependabot doesn't see it). Other game settings live in server.properties in the data
+  # is a reviewed change (Renovate doesn't see it). Other game settings live in server.properties in the data
   # directory; the image rewrites only the ones set below.
   minecraft:
     <<: *hardened
