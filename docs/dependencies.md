@@ -36,7 +36,7 @@ Bedrock clients can only join a Bedrock server. It runs with no added privileges
 | The Bedrock Dedicated Server | `compose.yaml` (the image's `VERSION`) | exact version | the image, from Minecraft's site, on start |
 | Helper image for backups and the smoke test (busybox) | [`scripts/lib.sh`](../scripts/lib.sh) | version tag and digest | Docker |
 | Linters and scanners used only by CI (actionlint, gitleaks, Trivy) | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scan.yml`](../.github/workflows/scan.yml) | version tag and digest | Docker |
-| Pre-commit hooks | [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) | full commit SHA of the release (version in a `# frozen:` comment); `shellcheck-py` by exact version | pre-commit |
+| Pre-commit hooks | [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) | release tag today (Renovate pins each hook to a full commit SHA, version in a `# frozen:` comment, in its first pull requests); `shellcheck-py` by exact version | pre-commit |
 | GitHub Actions | [`.github/workflows/`](../.github/workflows/) | full commit SHA (version in a comment) | GitHub Actions |
 | Images of the GitLab copy's pipeline (Python, Docker CLI, git, gitleaks, actionlint) | [`.gitlab-ci.yml`](../.gitlab-ci.yml) | version tag and digest | GitLab Runner (Docker executor) |
 
@@ -61,12 +61,16 @@ a tool's new dependencies and all hashes come with the pull request.
   maintainer.
 - **Image rebuilds are proposed, and merge, like any other update**: a new digest under the same tag (a rebuild of
   the same app version, with newer base packages), except that they skip the three-day wait (below).
-- **A new version waits three days after its release** (`minimumReleaseAge`), so a release that is pulled or fixed
+- **A new version waits three days after its release** (`minimumReleaseAge`, where the registry reports a release
+  date; a version whose registry reports none is proposed without the wait), so a release that is pulled or fixed
   within days doesn't reach the server; the pull request then merges as above. Fixes for vulnerability alerts skip
   the wait. An image rebuild skips it too: Docker Hub dates a rebuild by the tag's last push, so a tag rebuilt about
   weekly would never get through the Monday-only schedule, and rebuilds are mostly base-image security refreshes,
   still gated by the smoke test and the required checks. A moved tag on a pre-commit hook or an Action keeps the
-  wait. A version update from a registry that reports no release date isn't held back either.
+  wait. The tools in `requirements-dev.txt` move one at a time through ordinary updates and so wait too: Renovate's
+  periodic refresh of the whole lock file, which would skip the wait, is switched off. Rebuilds of the CI tool images
+  in the workflows and scripts skip the wait like the stack's. autoheal is pinned to the `latest` tag, so its
+  "rebuild" (a new digest) can be a new autoheal version, and it merges like any rebuild.
 - **Some pins move together**: ruff, yamllint and shellcheck-py are pinned in `requirements-dev.txt` and in
   `.pre-commit-config.yaml`, and Renovate groups each tool's two pins. Grouping is best-effort: a member that hasn't
   waited out its three days is left out of an otherwise ready group, so the two pins can differ for a week. That's
@@ -107,11 +111,10 @@ qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the ho
   libtorrent is part of the tag's version scheme), which merge by themselves like the other images' rebuilds and
   always keep libtorrent 2.1.2. This is the rule Dependabot had, unchanged. A new qBittorrent version is a pull
   request by hand: read its release notes (a new minor version can migrate the settings one way), check which
-  libtorrent the build uses, and back up first. The tags an update tool could follow are worse here: the plain version
-  and `latest` move to whichever libtorrent linuxserver.io builds next, and they did
-  build 5.3.0 on libtorrent 2.0 for some hours (on 2026-10-20,
-  and on the libtorrent 1.2 line on 2026-10-21), so a rebuild under one of them could change the libtorrent
-  unattended.
+  libtorrent the build uses, and back up first. The tags an update tool could follow are worse here: the plain
+  version and `latest` move to whichever libtorrent linuxserver.io builds next, and they did build 5.3.0 on
+  libtorrent 2.0 for some hours (on 2026-10-20, and on the libtorrent 1.2 line on 2026-10-21), so a rebuild under one
+  of them could change the libtorrent unattended.
 - **libtorrent 2.1 or newer, never memory-mapped files.** libtorrent 2.0 (qBittorrent 4.5.5's) maps every file it
   reads or writes into memory, and its own documentation calls writing that way to a network share most likely
   inferior: the share's page cache shows up as qBittorrent's memory and every page fault waits on the network. libtorrent 2.1

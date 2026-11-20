@@ -53,11 +53,13 @@ Who can change the code, releases and project settings, as of the date of this f
 | The OpenSSF Best Practices badge entry | the maintainer | GitHub sign-in |
 | Pulling public images from Docker Hub in CI without the anonymous rate limit | the workflow steps that log in (CI, image scan) | a Docker Hub access token limited to reading public repositories |
 | Security advisories and private vulnerability reports | the maintainer | GitHub |
-| Automated changes | Renovate (GitHub app, pull requests only); it waits 3 days after a new version's release (image rebuilds and security fixes don't wait) and turns on auto-merge for its patch, minor and major updates and image rebuilds, which GitHub merges only after every required check passes | GitHub app installation token |
+| Automated changes | Renovate (GitHub app, pull requests only); it waits 3 days after a new version's release where the registry reports a date (image rebuilds and security fixes don't wait) and turns on auto-merge for its patch, minor and major updates and image rebuilds, which GitHub merges only after every required check passes | GitHub app installation token |
 
 There are no other collaborators. Workflows use the per-job `GITHUB_TOKEN`, read-only unless a job asks for
 more, and repository secrets are only available to the workflows that name them, never to pull requests
-from forks. The project stores one repository secret, the read-only Docker Hub token (below).
+from forks. The project stores one repository secret, the read-only Docker Hub token (below). Renovate's pull
+requests are branches in this repository, so their CI runs with that secret, including pull requests that update
+the Actions in workflow files; CI logs out of Docker Hub before any container under test starts.
 
 ## Granting elevated access
 

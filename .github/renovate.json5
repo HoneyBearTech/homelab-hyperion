@@ -53,6 +53,12 @@
   // pip_requirements manager is off, so the same pins aren't also bumped in place.
   "pip-compile": {
     managerFilePatterns: ["/^requirements-dev\\.txt$/"],
+    // Renovate's pip-compile manager turns on a periodic "lock file maintenance" by default, which re-resolves every
+    // tool to its newest version at once, with no release dates, so it would skip the 3-day wait and then merge by
+    // itself. Off: the tools move one at a time through ordinary updates, which do wait.
+    lockFileMaintenance: {
+      enabled: false,
+    },
   },
 
   customManagers: [
