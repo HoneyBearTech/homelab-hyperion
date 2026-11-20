@@ -9,14 +9,14 @@ file changes with them, in the same pull request.
   the sibling homelab stacks (backups skip the downloads directory).
 - Done: `compose.yaml` with Prowlarr, qBittorrent, Heimdall, Dozzle, the Minecraft Bedrock server, and autoheal
   behind a socket proxy, every image pinned by tag and digest for `linux/amd64` and the Minecraft server's
-  version pinned too, a health check on every service, Dependabot proposing updates; the smoke test (including
-  an autoheal restart) and the image scan run against it in CI.
+  version pinned too, a health check on every service, Renovate proposing updates (Dependabot until 2026-11);
+  the smoke test (including an autoheal restart) and the image scan run against it in CI.
 - Done: the first image scan, triaged ([dependencies.md](dependencies.md#current-findings)).
 - Done: the first release, 0.1.0, before Hyperion switched over, so the server was first deployed from a signed,
   verified version.
 - Done: Hyperion runs the stack from a checkout of this repository, with the existing data, ports and download
   paths.
-- Done: Hyperion follows `main` with a pull agent, so a merge deploys within minutes, Dependabot's automatic merges
+- Done: Hyperion follows `main` with a pull agent, so a merge deploys within minutes, Renovate's automatic merges
   included ([upgrading.md](upgrading.md#following-main)); releases stay as signed, verified snapshots.
 - Done: qBittorrent upgraded from 4.5.5 to 5.3.0 (libtorrent 2.1), in its own pull request, once the maintainer
   lifted the hold on 2026-10-22.
@@ -32,8 +32,13 @@ file changes with them, in the same pull request.
 - Done: backups and restores take turns with the pull agent, so a deploy never recreates a service they stopped.
 - Done (0.2.0): every service drops all capabilities and adds back only what its image needs, can't gain new
   privileges, and has a read-only root filesystem where the image allows it ([security.md](security.md)).
+- Done: Renovate replaces Dependabot for version updates, with the same automatic merges plus a 3-day wait for new
+  versions, and it also proposes the pins that were bumped by hand ([dependencies.md](dependencies.md)).
 
 ## Later
+
+- Remove the idle `dependabot-auto-merge.yml` workflow and the two workflow comments that still name Dependabot
+  (a workflow change, for the maintainer).
 
 - Non-root users and read-only root filesystems for the images that don't allow them yet.
 - Optional services as Compose profiles, so a smaller installation can leave them out.
