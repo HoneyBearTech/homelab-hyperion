@@ -36,41 +36,61 @@ Bedrock clients can only join a Bedrock server. It runs with no added privileges
 | The Bedrock Dedicated Server | `compose.yaml` (the image's `VERSION`) | exact version | the image, from Minecraft's site, on start |
 | Helper image for backups and the smoke test (busybox) | [`scripts/lib.sh`](../scripts/lib.sh) | version tag and digest | Docker |
 | Linters and scanners used only by CI (actionlint, gitleaks, Trivy) | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scan.yml`](../.github/workflows/scan.yml) | version tag and digest | Docker |
+| Pre-commit hooks | [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) | full commit SHA of the release (version in a `# frozen:` comment); `shellcheck-py` by exact version | pre-commit |
 | GitHub Actions | [`.github/workflows/`](../.github/workflows/) | full commit SHA (version in a comment) | GitHub Actions |
 | Images of the GitLab copy's pipeline (Python, Docker CLI, git, gitleaks, actionlint) | [`.gitlab-ci.yml`](../.gitlab-ci.yml) | version tag and digest | GitLab Runner (Docker executor) |
 
 Each release will carry a CycloneDX SBOM listing every service's image and digest
-([verifying-releases.md](verifying-releases.md)).
+([verifying-releases.md](verifying-releases.md)). To update the pinned Python tools by hand, edit
+`requirements-dev.in` if needed and run `pip-compile --generate-hashes --strip-extras requirements-dev.in`. Renovate
+does the same for its updates: it re-locks `requirements-dev.txt` with that command (read from the file's header), so
+a tool's new dependencies and all hashes come with the pull request.
 
 ## Tracking dependencies
 
-- **Dependabot** ([`.github/dependabot.yml`](../.github/dependabot.yml)) checks weekly for new image versions in the Compose file, new tool versions and new Action
-  versions, and opens a pull request for each. Dependabot alerts and security updates are on.
-- The CI-only images in `run:` steps, the images in `.gitlab-ci.yml`, the scripts' busybox image, the smoke test's
-  stand-in PostgreSQL, the smoke test's late Dozzle agent (a Dozzle release pinned in
-  [`scripts/smoke-stack.sh`](../scripts/smoke-stack.sh)) and the Minecraft server's version aren't seen by Dependabot; they're bumped by hand at least every quarter (the
-  Minecraft server whenever players' clients need a newer one, since Bedrock clients usually join only a server
-  of their own version). Nor are new qBittorrent versions: Dependabot only proposes rebuilds of qBittorrent's
-  pinned tag ([below](#qbittorrent)), and a new version is bumped by hand when upstream releases one. Nor is
-  Dozzle while it runs upstream's test build: Dependabot ignores it until a release replaces that build
-  ([below](#dozzle)).
-- **Patch and minor updates merge automatically** once every required check has passed (CI with the Compose
-  policy check and the smoke test, CodeQL, dependency review).
-- **Image rebuilds merge automatically too**: a pull request that only moves an image to a new digest under the
-  same tag (a rebuild of the same app version, with newer base packages) and changes nothing else in `compose.yaml`.
+- **Renovate** ([`.github/renovate.json5`](../.github/renovate.json5)) checks weekly (Mondays, 06:00 to 10:00 UTC)
+  for new image versions in the Compose file, new tool versions (re-locking `requirements-dev.txt` with
+  pip-compile), new Action versions, new pre-commit hook versions and new digests of the images that workflow steps,
+  the GitLab pipeline and the scripts run, and opens a pull request for each. It reads `compose.yaml`,
+  `requirements-dev.txt`, the workflows, `.gitlab-ci.yml`, `.pre-commit-config.yaml`, and the images pinned in
+  `.github/workflows/` and `scripts/*.sh`, and nothing else. Its commits are made through GitHub's API, so they're
+  signed, and carry a DCO sign-off. Dependabot alerts stay on; Dependabot no longer opens version updates.
+- **Patch, minor and major updates merge automatically**: Renovate turns on GitHub's auto-merge for each of its
+  pull requests, so they're squash-merged once every required check has passed (CI with the Compose policy check and
+  the smoke test, CodeQL, dependency review, DCO). Nothing skips a check, and a failing update stays open for the
+  maintainer.
+- **Image rebuilds are proposed, and merge, like any other update**: a new digest under the same tag (a rebuild of
+  the same app version, with newer base packages), except that they skip the three-day wait (below).
+- **A new version waits three days after its release** (`minimumReleaseAge`), so a release that is pulled or fixed
+  within days doesn't reach the server; the pull request then merges as above. Fixes for vulnerability alerts skip
+  the wait. An image rebuild skips it too: Docker Hub dates a rebuild by the tag's last push, so a tag rebuilt about
+  weekly would never get through the Monday-only schedule, and rebuilds are mostly base-image security refreshes,
+  still gated by the smoke test and the required checks. A moved tag on a pre-commit hook or an Action keeps the
+  wait. A version update from a registry that reports no release date isn't held back either.
+- **Some pins move together**: ruff, yamllint and shellcheck-py are pinned in `requirements-dev.txt` and in
+  `.pre-commit-config.yaml`, and Renovate groups each tool's two pins. Grouping is best-effort: a member that hasn't
+  waited out its three days is left out of an otherwise ready group, so the two pins can differ for a week. That's
+  harmless: CI uses `requirements-dev.txt`. The CodeQL actions (`init`, `analyze`, `upload-sarif`) and Steerhouse's
+  images are grouped the same way, so each set moves in one pull request.
+- **Left to be bumped by hand**: new qBittorrent versions and the Dozzle build ([below](#qbittorrent)), the Minecraft
+  server's version, the smoke test's `runs-on: ubuntu-24.04` label (it matches the server's Ubuntu release, so
+  Renovate doesn't update runner labels), and Python's minor version (3.14, in `pyproject.toml`, the `setup-python`
+  steps and the GitLab job image: Renovate proposes new 3.14 patch releases, not 3.15). The Minecraft server moves
+  whenever players' clients need a newer one, since Bedrock clients usually join only a server of their own
+  version. `dependabot/fetch-metadata` isn't updated either: only the idle
+  `.github/workflows/dependabot-auto-merge.yml` uses it, and nothing triggers that workflow any more.
 - **Major updates merge automatically too** (owner 2026-10-14), once the same checks pass, and reach the
   maintainer's server unattended. A new major version can migrate its data one way, so a revert alone doesn't undo
-  it: the nightly backup is the way back (`scripts/restore.sh`). Only an update Dependabot can't classify (a tag
-  scheme it doesn't read as a version) is merged by hand.
+  it: the nightly backup is the way back (`scripts/restore.sh`).
 - **linuxserver.io images are pinned by their `version-<app version>` tag**
-  (`prowlarr:version-2.6.5.5623@sha256:…`), which always points at the newest build of that app version. Dependabot
-  can't follow the build tags (`2.6.5.5623-ls163`): it reads `-ls163` as a suffix that must match exactly, so it
-  never proposes another build. With the `version-` tag it proposes both new app versions and rebuilds (a new digest
-  under the same tag). socket-proxy uses its bare version tag (`3.4.6`) for the same reason.
+  (`prowlarr:version-2.7.0.5723@sha256:…`), which always points at the newest build of that app version; Renovate
+  reads it with a version scheme of its own (`packageRules` in its configuration) and never proposes the build tags
+  (`2.7.0.5723-ls163`). With the `version-` tag it proposes both new app versions and rebuilds (a new digest under
+  the same tag). socket-proxy uses its bare version tag (`3.4.8`) for the same reason.
 - **A merge deploys.** The maintainer's server follows `main` with a pull agent, so every merge, the automatic
-  ones included, reaches it within about two minutes ([upgrading.md](upgrading.md#following-main)). Dependabot's
-  major updates, which can migrate data, therefore deploy unattended with the nightly backup behind them; the
-  changes merged by hand (the Minecraft server's version, a new qBittorrent version) get a backup first.
+  ones included, reaches it within about two minutes ([upgrading.md](upgrading.md#following-main)). Major updates,
+  which can migrate data, therefore deploy unattended with the nightly backup behind them; the changes merged by
+  hand (the Minecraft server's version, a new qBittorrent version) get a backup first.
 - **Dependency review** blocks a pull request that adds or changes a Python or Actions dependency with a known
   vulnerability of moderate severity or higher, or a license outside the allowlist.
 - **Nothing on the host updates from a registry.** Auto-updaters such as Watchtower are not used: they would run
@@ -79,15 +99,17 @@ Each release will carry a CycloneDX SBOM listing every service's image and diges
 ### qBittorrent
 
 qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the hold on 2026-10-22; it now runs
-5.3.0, and Dependabot no longer ignores it. Two things about it differ from the other linuxserver.io images:
+5.3.0, and the update tool no longer ignores it. Two things about it differ from the other linuxserver.io images:
 
 - **Its `version-` tag names the libtorrent too**: `version-5.3.0_v2.1.2` is qBittorrent 5.3.0 built on libtorrent
-  2.1.2, pointing at the newest build of exactly that pair. Dependabot can't read that as a version (its tag parser
-  stops at the `_v`), so it proposes only rebuilds of the pinned tag, which merge by themselves like the other
-  images' rebuilds and always keep libtorrent 2.1.2. A new qBittorrent version is a pull request by hand: read its
-  release notes (a new minor version can migrate the settings one way), check which libtorrent the build uses, and
-  back up first. The tags Dependabot could follow are worse here: the plain version and `latest` move to whichever
-  libtorrent linuxserver.io builds next, and they did build 5.3.0 on libtorrent 2.0 for some hours (on 2026-10-20,
+  2.1.2, pointing at the newest build of exactly that pair. Renovate is told to propose only rebuilds of the pinned
+  tag (new digests; the version updates for qBittorrent are switched off in `.github/renovate.json5`, and the
+  libtorrent is part of the tag's version scheme), which merge by themselves like the other images' rebuilds and
+  always keep libtorrent 2.1.2. This is the rule Dependabot had, unchanged. A new qBittorrent version is a pull
+  request by hand: read its release notes (a new minor version can migrate the settings one way), check which
+  libtorrent the build uses, and back up first. The tags an update tool could follow are worse here: the plain version
+  and `latest` move to whichever libtorrent linuxserver.io builds next, and they did
+  build 5.3.0 on libtorrent 2.0 for some hours (on 2026-10-20,
   and on the libtorrent 1.2 line on 2026-10-21), so a rebuild under one of them could change the libtorrent
   unattended.
 - **libtorrent 2.1 or newer, never memory-mapped files.** libtorrent 2.0 (qBittorrent 4.5.5's) maps every file it
@@ -104,7 +126,7 @@ qBittorrent was held at 4.5.5 from 2026-10-14 until the maintainer lifted the ho
 
 Since 2026-11-12 Dozzle runs **upstream's test build of a fix, not a release**:
 `amir20/dozzle:pr-5626@sha256:99489d34c9f91c81d299feac5a66eac98ded3c51e910ea2b84d402d9671f9ad5`, the image
-upstream's CI built from the branch of amir20/dozzle#5626. Dependabot ignores Dozzle meanwhile.
+upstream's CI built from the branch of amir20/dozzle#5626. Renovate's update of Dozzle is switched off meanwhile.
 
 - **Why.** Up to v11.4.2, Dozzle dials each agent in `DOZZLE_REMOTE_AGENT` once, as it starts, and never again
   after that dial failed: a host that was down when Dozzle started stays unavailable until Dozzle is restarted
@@ -116,26 +138,27 @@ upstream's CI built from the branch of amir20/dozzle#5626. Dependabot ignores Do
   cooldowns and "send immediately", a login fix, dependency updates) and the fix. It comes from upstream's own CI
   and the same registry repository as the releases. Its tag no longer moves, since the pull request is merged, and
   it is pinned by digest like every image.
-- **Why Dependabot ignores Dozzle** (`ignore` in [`.github/dependabot.yml`](../.github/dependabot.yml)).
-  Dependabot reads `pr-5626` as version 5626 with the prefix `pr-`, and upstream publishes a `pr-<number>` image
-  for every pull request. Its weekly run would propose the highest-numbered one as a major update, and the
-  auto-merge would merge and deploy it: an unreviewed build of some other pull request, with the Docker socket.
-  While the hold lasts, Dependabot proposes no Dozzle update at all, security fixes included; the weekly image
-  scan still scans the pinned build and reports its findings.
+- **Why Renovate skips Dozzle** (the `amir20/dozzle` rule in [`.github/renovate.json5`](../.github/renovate.json5)).
+  Upstream publishes a `pr-<number>` image for every pull request, and a weekly run would follow the pinned tag to
+  the highest-numbered one, which the auto-merge would then merge and deploy: an unreviewed build of some other
+  pull request, with the Docker socket. While the hold lasts, Renovate proposes no Dozzle update at all, security
+  fixes included; the weekly image scan still scans the pinned build and reports its findings.
 - **How the hold ends.** When upstream publishes the first release that contains the fix, a pull request by hand
-  pins it (`amir20/dozzle:<version>@sha256:<digest>`) and removes the `ignore` entry in the same pull request;
-  from then on Dependabot follows Dozzle's releases again. Nothing announces that release: check upstream's
+  pins it (`amir20/dozzle:<version>@sha256:<digest>`) and removes the Dozzle rule from `.github/renovate.json5` in
+  the same pull request; from then on Renovate follows Dozzle's releases again. Nothing announces that release: check
+  upstream's
   releases. If upstream removes the test image from the registry before that, a server that no longer has the
   image can't pull it, and the way out is the same pull request.
 - **The smoke test's late agent** (`dozzle-late-test`, the agent that starts after Dozzle) runs a Dozzle release,
-  v11.4.1, pinned by tag and digest in `scripts/smoke-stack.sh`. Dependabot doesn't read that file: bump it by
-  hand, to a release the agents on the other hosts run.
+  v11.4.1, pinned by tag and digest in `scripts/smoke-stack.sh`. Renovate reads that pin, but the Dozzle rule above
+  holds it
+  too: bump it by hand, to a release the agents on the other hosts run.
 
 ### Steerhouse
 
 Steerhouse's two images (`honeybeartech/steerhouse-backend`, which the API and the workers share, and
 `-frontend`) are published for `linux/amd64` only, signed, and scanned by Steerhouse's own release workflow;
-Dependabot bumps both together. A new Steerhouse version migrates its database when the API starts: read its
+Renovate bumps both together. A new Steerhouse version migrates its database when the API starts: read its
 release notes, and run `scripts/steerhouse.sh grafana-role` afterwards so that `grafana_ro` can read any new
 `analytics` view. Its database is on the database server, whose PostgreSQL is upgraded there, not here.
 
@@ -145,7 +168,7 @@ Known vulnerabilities are found through Dependabot alerts, the services' and ima
 weekly scan of the pinned digests (Trivy, HIGH and CRITICAL findings that have a fix, for `linux/amd64`,
 reported to code scanning). Each finding is triaged within 14 days:
 
-1. **If a fixed version exists**, bump to it (a Dependabot pull request usually already does) and release.
+1. **If a fixed version exists**, bump to it (a Renovate pull request usually already does) and release.
    A fix for an exploitable critical or high-severity vulnerability goes out in a patch release within 30
    days; others go out with the next release.
 2. **If upstream hasn't released a fix**, assess whether it's reachable in this stack (which ports are
@@ -236,7 +259,7 @@ Prowlarr (128, all 10 critical), the Minecraft image (39) and Heimdall (14: the 
   configuration has no `alias` and no `rewrite`, and its one `map` (`$http_upgrade`, for websockets) matches fixed
   strings only (checked in the image). CVE-2026-97205 (`ngx_http_core_module`, no details published yet) is
   reachable from the LAN, where Heimdall's UI stays. Fixed when linuxserver.io rebuilds the image on a patched nginx;
-  Dependabot proposes that rebuild.
+  Renovate proposes that rebuild.
 
 **Older than 60 days.** After the upgrade to qBittorrent 5.3.0, these findings have had a fix public for more than
 60 days (as of 2026-10-22). None of them is in this repository's own code, which has no known vulnerabilities; all

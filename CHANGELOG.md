@@ -142,6 +142,15 @@ All notable changes to homelab-hyperion are documented here. The format follows
 
 ### Changed
 
+- **Renovate replaces Dependabot for version updates.** `.github/dependabot.yml` is gone; Renovate
+  (`.github/renovate.json5`) proposes updates on a Monday schedule and merges patch, minor and major updates and image
+  rebuilds once every required check passes, as before. New versions wait three days after their release (rebuilds and
+  vulnerability fixes don't), and its commits are signed and signed off. It also proposes the pins Dependabot never
+  saw: the images that workflow steps and the scripts run, the GitLab pipeline's images and the pre-commit hooks.
+  qBittorrent keeps its rule (rebuilds of its tag merge, a new version is bumped by hand), Dozzle stays held until
+  its fixed release is pinned, and Python's minor version stays hand-picked. Dependabot alerts stay on.
+  `requirements-dev.txt` is re-locked with pip-compile's standard header, with the same versions.
+
 - Steerhouse 0.11.0 replaces 0.10.1 (backend and frontend images, pinned by tag and digest; the digests are the ones
   in the release's signed `images.txt`). It fixes vault-encrypted values in a host's vars or a run's extra vars,
   which reached Ansible undecrypted (an encrypted `ansible_become_password` was refused as the sudo password), and
